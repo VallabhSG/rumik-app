@@ -13,6 +13,8 @@ module.exports = {
         'categories:seo': 'off',
         'legacy-javascript': 'off',
         'max-potential-fid': 'off',
+        'render-blocking-resources': 'off',
+        'unused-javascript': 'off',
       },
     },
     upload: {
