@@ -123,7 +123,7 @@ jobs:
       - name: Serve + run E2E
         run: |
           npx serve dist -p 3000 &
-          sleep 3
+          npx wait-on http://localhost:3000 --timeout 30000
           npx playwright test --project=chromium
         env:
           BASE_URL: http://localhost:3000
@@ -159,9 +159,9 @@ jobs:
 
       - name: Run Lighthouse CI
         run: |
-          npm install -g @lhci/cli
-          npx serve dist -p 3001 &
-          sleep 3
+          npm install -g @lhci/cli serve wait-on
+          serve dist -p 3001 &
+          wait-on http://localhost:3001 --timeout 30000
           lhci autorun
         env:
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
