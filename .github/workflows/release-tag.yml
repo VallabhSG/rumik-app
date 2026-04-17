@@ -5,7 +5,9 @@ name: Auto Release Tag
 #   feat:      → minor bump  (1.0.0 → 1.1.0)
 #   fix/perf:  → patch bump  (1.0.0 → 1.0.1)
 #   BREAKING CHANGE / feat!: → major bump (1.0.0 → 2.0.0)
-# Then pushes a vX.Y.Z tag, which triggers production.yml.
+# Then pushes a vX.Y.Z tag and directly dispatches production.yml.
+# NOTE: Tags pushed via GITHUB_TOKEN do not trigger downstream workflows,
+# so we dispatch production.yml explicitly via the API.
 
 on:
   push:
@@ -70,3 +72,12 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag "${{ steps.semver.outputs.tag }}"
           git push origin "${{ steps.semver.outputs.tag }}"
+
+      - name: Dispatch production release
+        if: steps.semver.outputs.skip == 'false'
+        run: |
+          curl -X POST \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/production.yml/dispatches" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"ref":"master","inputs":{"version":"${{ steps.semver.outputs.version }}"}}'
