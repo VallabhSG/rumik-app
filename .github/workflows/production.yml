@@ -168,7 +168,7 @@ jobs:
           EAS_UPDATE_AUTO_ROLLBACK_THRESHOLD: 0.05  # 5% crash rate triggers rollback
 
       - name: Register release with custom OTA server
-        if: ${{ secrets.OTA_SERVER_URL != '' }}
+        continue-on-error: true
         run: |
           curl -X POST "${{ secrets.OTA_SERVER_URL }}/api/releases" \
             -H "Authorization: Bearer ${{ secrets.OTA_API_KEY }}" \
