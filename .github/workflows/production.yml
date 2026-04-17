@@ -177,11 +177,14 @@ jobs:
             }'
 
   # ── Android → Play Store ──────────────────────────────────────────────────────
+  # SKIPPED: No Google Play Developer account ($25 one-time fee required).
+  # To enable: register at play.google.com/console, create a service account,
+  # add secret GOOGLE_SERVICE_ACCOUNT_KEY and remove the 'if: false' condition below.
   release-android:
     name: Play Store Release
     runs-on: ubuntu-latest
     needs: [version, bump-version]
-    if: needs.version.outputs.is_rollback == 'false' && github.event.inputs.skip_stores != 'true'
+    if: false  # SKIPPED: No Google Play Developer account
     steps:
       - uses: actions/checkout@v4
 
@@ -205,11 +208,14 @@ jobs:
           EXPO_GOOGLE_SERVICE_ACCOUNT_KEY: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}
 
   # ── iOS → App Store ───────────────────────────────────────────────────────────
+  # SKIPPED: No Apple Developer account ($99/year required).
+  # To enable: add secrets EXPO_APPLE_ID, EXPO_APPLE_APP_SPECIFIC_PASSWORD,
+  # ASC_APP_ID, APPLE_TEAM_ID and remove the 'if: false' condition below.
   release-ios:
     name: App Store Release
     runs-on: macos-14
     needs: [version, bump-version]
-    if: needs.version.outputs.is_rollback == 'false' && github.event.inputs.skip_stores != 'true'
+    if: false  # SKIPPED: No Apple Developer account
     steps:
       - uses: actions/checkout@v4
 

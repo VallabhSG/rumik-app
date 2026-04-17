@@ -60,10 +60,13 @@ jobs:
             ${{ github.event.head_commit.message }}
 
   # ── iOS → TestFlight ──────────────────────────────────────────────────────────
+  # SKIPPED: No Apple Developer account ($99/year required).
+  # To enable: add secrets EXPO_APPLE_ID, EXPO_APPLE_APP_SPECIFIC_PASSWORD,
+  # ASC_APP_ID, APPLE_TEAM_ID and remove the 'if: false' condition below.
   staging-ios:
     name: iOS Staging (TestFlight)
     runs-on: macos-14
-    if: github.event.inputs.platform == 'all' || github.event.inputs.platform == 'ios' || github.event_name == 'push'
+    if: false  # SKIPPED: No Apple Developer account
     steps:
       - uses: actions/checkout@v4
 
