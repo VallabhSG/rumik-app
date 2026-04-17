@@ -1,0 +1,114 @@
+name: Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to rollback to (e.g. 1.2.2)
+        required: true
+      reason:
+        description: Reason for rollback
+        required: true
+      channels:
+        description: Channels to rollback (comma-separated)
+        default: production
+        required: true
+
+env:
+  EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+jobs:
+  rollback:
+    name: Execute Rollback to v${{ github.event.inputs.version }}
+    runs-on: ubuntu-latest
+    environment: production   # requires manual approval in GitHub Environments
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci --prefer-offline
+
+      - uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Verify target version exists
+        run: |
+          git fetch --tags
+          if ! git rev-parse "v${{ github.event.inputs.version }}" >/dev/null 2>&1; then
+            echo "::error::Tag v${{ github.event.inputs.version }} does not exist"
+            exit 1
+          fi
+
+      # Pause current rollout first
+      - name: Pause current OTA rollout
+        run: |
+          curl -X POST "${{ secrets.OTA_SERVER_URL }}/api/releases/current/pause" \
+            -H "Authorization: Bearer ${{ secrets.OTA_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"reason": "${{ github.event.inputs.reason }}"}'
+
+      # Roll OTA updates back to stable version
+      - name: OTA rollback via EAS Update
+        run: |
+          IFS=',' read -ra CHANNELS <<< "${{ github.event.inputs.channels }}"
+          for channel in "${CHANNELS[@]}"; do
+            channel=$(echo "$channel" | tr -d ' ')
+            echo "Rolling back channel: $channel"
+            eas update:rollback --branch "$channel" --non-interactive || true
+          done
+
+      # Register rollback with custom OTA server
+      - name: Register rollback with OTA server
+        run: |
+          curl -X POST "${{ secrets.OTA_SERVER_URL }}/api/rollbacks" \
+            -H "Authorization: Bearer ${{ secrets.OTA_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "target_version": "${{ github.event.inputs.version }}",
+              "reason": "${{ github.event.inputs.reason }}",
+              "channels": "${{ github.event.inputs.channels }}",
+              "triggered_by": "${{ github.actor }}"
+            }'
+
+      - name: Create rollback GitHub issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🔄 Rollback to v${{ github.event.inputs.version }}`,
+              body: [
+                '## Rollback Executed',
+                '',
+                `**Target version:** v${{ github.event.inputs.version }}`,
+                `**Channels:** ${{ github.event.inputs.channels }}`,
+                `**Reason:** ${{ github.event.inputs.reason }}`,
+                `**Triggered by:** @${{ github.actor }}`,
+                `**Time:** ${new Date().toISOString()}`,
+                '',
+                '## Next Steps',
+                '- [ ] Investigate root cause',
+                '- [ ] Fix and create new release',
+                '- [ ] Update post-mortem',
+              ].join('\n'),
+              labels: ['rollback', 'incident']
+            });
+
+      - name: Notify (Slack)
+        if: always()
+        run: |
+          curl -X POST "${{ secrets.SLACK_WEBHOOK }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "text": "🔄 *Rollback executed* to v${{ github.event.inputs.version }}\nReason: ${{ github.event.inputs.reason }}\nBy: ${{ github.actor }}\nStatus: ${{ job.status }}"
+            }'

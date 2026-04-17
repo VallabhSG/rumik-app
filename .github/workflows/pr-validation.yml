@@ -1,0 +1,161 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: pr-validation-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Formatting ──────────────────────────────────────────────────────────────
+  format-check:
+    name: Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci --prefer-offline
+
+      - name: Prettier check
+        run: npx prettier --check "src/**/*.{ts,tsx}" "App.tsx"
+
+  # ── Type Checking ────────────────────────────────────────────────────────────
+  typecheck:
+    name: TypeScript
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci --prefer-offline
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+  # ── Unit Tests + Coverage ────────────────────────────────────────────────────
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci --prefer-offline
+
+      - name: Run tests with coverage
+        run: npm test -- --coverage --coverageThreshold='{"global":{"lines":80,"functions":80,"branches":70,"statements":80}}'
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7
+
+  # ── Bundle Size Guard ────────────────────────────────────────────────────────
+  bundle-size:
+    name: Bundle Size
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci --prefer-offline
+
+      - name: Export web bundle
+        run: npx expo export --platform web --output-dir dist-ci
+        env:
+          EXPO_NO_DOTENV: 1
+
+      - name: Check bundle size
+        run: |
+          BUNDLE_SIZE=$(du -sk dist-ci | cut -f1)
+          echo "Bundle size: ${BUNDLE_SIZE}KB"
+          # Fail if web bundle exceeds 5MB (5120 KB)
+          if [ "$BUNDLE_SIZE" -gt 5120 ]; then
+            echo "::error::Bundle size ${BUNDLE_SIZE}KB exceeds 5120KB limit"
+            exit 1
+          fi
+          echo "bundle_size=${BUNDLE_SIZE}" >> $GITHUB_OUTPUT
+        id: size-check
+
+      - name: Comment bundle size on PR
+        uses: actions/github-script@v7
+        if: github.event_name == 'pull_request'
+        with:
+          script: |
+            const size = '${{ steps.size-check.outputs.bundle_size }}';
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `📦 **Bundle Size:** ${size}KB / 5120KB limit`
+            });
+
+  # ── Dependency Audit ─────────────────────────────────────────────────────────
+  audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: npm audit (high + critical only)
+        run: npm audit --audit-level=high --omit=dev
+
+  # ── ESLint ───────────────────────────────────────────────────────────────────
+  lint:
+    name: ESLint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci --prefer-offline
+
+      - name: Lint
+        run: npx eslint "src/**/*.{ts,tsx}" "App.tsx" --max-warnings 0
+
+  # ── Summary gate ─────────────────────────────────────────────────────────────
+  pr-gate:
+    name: PR Gate
+    needs: [format-check, typecheck, test, bundle-size, audit, lint]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check all jobs passed
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]]; then
+            echo "One or more PR validation jobs failed"
+            exit 1
+          fi
+          echo "All PR validation checks passed ✓"

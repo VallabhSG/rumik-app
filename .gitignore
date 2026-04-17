@@ -39,3 +39,13 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# test coverage
+coverage/
+
+# local build previews
+dist-preview/
+dist-ci/
+
+# google service account (never commit)
+google-service-account.json

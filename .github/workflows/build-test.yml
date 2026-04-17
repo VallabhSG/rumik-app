@@ -1,0 +1,172 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+jobs:
+  # ── Matrix builds ────────────────────────────────────────────────────────────
+  build:
+    name: Build (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: android
+            runner: ubuntu-latest
+            eas_profile: preview
+          - platform: ios
+            runner: macos-14
+            eas_profile: preview
+          - platform: web
+            runner: ubuntu-latest
+            eas_profile: preview
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci --prefer-offline
+
+      - uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # Web: local export (no EAS needed)
+      - name: Export web
+        if: matrix.platform == 'web'
+        run: npx expo export --platform web --output-dir dist
+        env:
+          EXPO_NO_DOTENV: 1
+
+      - name: Upload web dist
+        if: matrix.platform == 'web'
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist-${{ github.sha }}
+          path: dist/
+          retention-days: 7
+
+      # Android / iOS: EAS build
+      - name: EAS Build (${{ matrix.platform }})
+        if: matrix.platform != 'web'
+        run: eas build --platform ${{ matrix.platform }} --profile ${{ matrix.eas_profile }} --non-interactive --no-wait
+        env:
+          EAS_BUILD_AUTOCOMMIT: 1
+
+  # ── Unit tests (fast, runs in parallel with builds) ──────────────────────────
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci --prefer-offline
+
+      - name: Run tests
+        run: npm test -- --coverage --ci --forceExit
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+  # ── E2E tests (web) ──────────────────────────────────────────────────────────
+  e2e-web:
+    name: E2E Tests (Web)
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci --prefer-offline
+
+      - name: Install Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Download web dist
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist-${{ github.sha }}
+          path: dist/
+
+      - name: Serve + run E2E
+        run: |
+          npx serve dist -p 3000 &
+          sleep 3
+          npx playwright test --project=chromium
+        env:
+          BASE_URL: http://localhost:3000
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-${{ github.sha }}
+          path: playwright-report/
+          retention-days: 7
+
+  # ── Performance snapshots ────────────────────────────────────────────────────
+  perf-snapshot:
+    name: Performance Snapshot
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci --prefer-offline
+
+      - name: Download web dist
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist-${{ github.sha }}
+          path: dist/
+
+      - name: Run Lighthouse CI
+        run: |
+          npm install -g @lhci/cli
+          npx serve dist -p 3001 &
+          sleep 3
+          lhci autorun
+        env:
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+
+      - name: Upload Lighthouse results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lighthouse-${{ github.sha }}
+          path: .lighthouseci/
+          retention-days: 14

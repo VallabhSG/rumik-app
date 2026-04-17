@@ -1,0 +1,334 @@
+name: Production Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'   # v1.2.3
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release (e.g. 1.2.3)
+        required: true
+      skip_stores:
+        description: Skip App Store / Play Store submission
+        type: boolean
+        default: false
+      rollback_to:
+        description: Version to rollback to (leave empty for normal release)
+        required: false
+
+env:
+  EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+jobs:
+  # ── Determine version ─────────────────────────────────────────────────────────
+  version:
+    name: Resolve Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      is_rollback: ${{ steps.ver.outputs.is_rollback }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: ver
+        run: |
+          if [ -n "${{ github.event.inputs.rollback_to }}" ]; then
+            echo "version=${{ github.event.inputs.rollback_to }}" >> $GITHUB_OUTPUT
+            echo "is_rollback=true" >> $GITHUB_OUTPUT
+          elif [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            echo "is_rollback=false" >> $GITHUB_OUTPUT
+          else
+            # Strip 'v' prefix from tag
+            VERSION="${GITHUB_REF_NAME#v}"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "is_rollback=false" >> $GITHUB_OUTPUT
+          fi
+
+  # ── Changelog generation ──────────────────────────────────────────────────────
+  changelog:
+    name: Generate Changelog
+    runs-on: ubuntu-latest
+    needs: version
+    if: needs.version.outputs.is_rollback == 'false'
+    outputs:
+      changelog: ${{ steps.gen.outputs.changelog }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: gen
+        name: Generate changelog from commits
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -z "$PREV_TAG" ]; then
+            RANGE="HEAD"
+          else
+            RANGE="${PREV_TAG}..HEAD"
+          fi
+
+          CHANGELOG=$(git log $RANGE --pretty=format:"- %s (%h)" --no-merges | \
+            grep -E "^- (feat|fix|perf|refactor|chore):" || echo "- Internal improvements")
+
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Update CHANGELOG.md
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          DATE=$(date +%Y-%m-%d)
+          ENTRY="## [$VERSION] - $DATE\n${{ steps.gen.outputs.changelog }}\n"
+
+          if [ -f CHANGELOG.md ]; then
+            echo -e "$ENTRY\n$(cat CHANGELOG.md)" > CHANGELOG.md
+          else
+            echo -e "# Changelog\n\n$ENTRY" > CHANGELOG.md
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: changelog-${{ needs.version.outputs.version }}
+          path: CHANGELOG.md
+
+  # ── Bump version in app.json ──────────────────────────────────────────────────
+  bump-version:
+    name: Bump app.json version
+    runs-on: ubuntu-latest
+    needs: version
+    if: needs.version.outputs.is_rollback == 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update version in app.json
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          node -e "
+            const fs = require('fs');
+            const app = JSON.parse(fs.readFileSync('app.json', 'utf8'));
+            app.expo.version = '$VERSION';
+            // Bump build numbers
+            const parts = '$VERSION'.split('.').map(Number);
+            const buildNum = parts[0] * 10000 + parts[1] * 100 + parts[2];
+            app.expo.ios = app.expo.ios || {};
+            app.expo.android = app.expo.android || {};
+            app.expo.ios.buildNumber = String(buildNum);
+            app.expo.android.versionCode = buildNum;
+            fs.writeFileSync('app.json', JSON.stringify(app, null, 2) + '\n');
+          "
+
+      - name: Commit version bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add app.json
+          git commit -m "chore: bump version to ${{ needs.version.outputs.version }} [skip ci]"
+          git push
+
+  # ── OTA Update ────────────────────────────────────────────────────────────────
+  ota-update:
+    name: OTA Update
+    runs-on: ubuntu-latest
+    needs: [version, bump-version]
+    if: always() && needs.version.result == 'success'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci --prefer-offline
+
+      - uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Publish OTA update via EAS Update
+        if: needs.version.outputs.is_rollback == 'false'
+        run: |
+          eas update \
+            --branch production \
+            --message "v${{ needs.version.outputs.version }}" \
+            --non-interactive
+        env:
+          EAS_UPDATE_AUTO_ROLLBACK_THRESHOLD: 0.05  # 5% crash rate triggers rollback
+
+      - name: Register release with custom OTA server
+        run: |
+          curl -X POST "${{ secrets.OTA_SERVER_URL }}/api/releases" \
+            -H "Authorization: Bearer ${{ secrets.OTA_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "version": "${{ needs.version.outputs.version }}",
+              "channel": "production",
+              "rollout_percentage": 5,
+              "is_rollback": ${{ needs.version.outputs.is_rollback }},
+              "commit_sha": "${{ github.sha }}"
+            }'
+
+  # ── Android → Play Store ──────────────────────────────────────────────────────
+  release-android:
+    name: Play Store Release
+    runs-on: ubuntu-latest
+    needs: [version, bump-version]
+    if: needs.version.outputs.is_rollback == 'false' && github.event.inputs.skip_stores != 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci --prefer-offline
+
+      - uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build + submit to Play Store (internal track)
+        run: eas build --platform android --profile production --non-interactive --wait --auto-submit
+        env:
+          EAS_BUILD_AUTOCOMMIT: 1
+          EXPO_GOOGLE_SERVICE_ACCOUNT_KEY: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}
+
+  # ── iOS → App Store ───────────────────────────────────────────────────────────
+  release-ios:
+    name: App Store Release
+    runs-on: macos-14
+    needs: [version, bump-version]
+    if: needs.version.outputs.is_rollback == 'false' && github.event.inputs.skip_stores != 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci --prefer-offline
+
+      - uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build + submit to App Store
+        run: eas build --platform ios --profile production --non-interactive --wait --auto-submit
+        env:
+          EAS_BUILD_AUTOCOMMIT: 1
+          EXPO_APPLE_ID: ${{ secrets.EXPO_APPLE_ID }}
+          EXPO_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.EXPO_APPLE_APP_SPECIFIC_PASSWORD }}
+
+  # ── Web → Production ──────────────────────────────────────────────────────────
+  release-web:
+    name: Web Production
+    runs-on: ubuntu-latest
+    needs: [version, bump-version]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci --prefer-offline
+
+      - name: Export web (production)
+        run: npx expo export --platform web --output-dir dist
+        env:
+          EXPO_NO_DOTENV: 1
+          NEXT_PUBLIC_API_URL: ${{ secrets.PROD_API_URL }}
+          NEXT_PUBLIC_OTA_SERVER: ${{ secrets.PROD_OTA_URL }}
+          NEXT_PUBLIC_CONFIG_SERVER: ${{ secrets.PROD_CONFIG_URL }}
+
+      - name: Deploy to Vercel (production)
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: --prod
+          working-directory: dist
+
+  # ── GitHub Release ────────────────────────────────────────────────────────────
+  github-release:
+    name: GitHub Release
+    runs-on: ubuntu-latest
+    needs: [version, changelog, ota-update]
+    if: always() && needs.version.outputs.is_rollback == 'false'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download changelog artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: changelog-${{ needs.version.outputs.version }}
+
+      - name: Create GitHub release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const changelog = fs.readFileSync('CHANGELOG.md', 'utf8')
+              .split('\n').slice(0, 30).join('\n');  // first 30 lines
+
+            await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: 'v${{ needs.version.outputs.version }}',
+              name: 'v${{ needs.version.outputs.version }}',
+              body: changelog,
+              draft: false,
+              prerelease: false
+            });
+
+  # ── Automatic rollback trigger ────────────────────────────────────────────────
+  rollback-monitor:
+    name: Rollback Monitor
+    runs-on: ubuntu-latest
+    needs: [ota-update]
+    steps:
+      - name: Monitor crash rate (5 min window)
+        run: |
+          sleep 300  # Wait 5 minutes for crash data
+
+          CRASH_RATE=$(curl -s "${{ secrets.MONITORING_URL }}/api/crash-rate/current" \
+            -H "Authorization: Bearer ${{ secrets.MONITORING_API_KEY }}" | \
+            jq -r '.crash_rate // 0')
+
+          echo "Current crash rate: $CRASH_RATE"
+
+          # If crash rate > 5%, trigger rollback
+          if (( $(echo "$CRASH_RATE > 0.05" | bc -l) )); then
+            echo "::error::Crash rate ${CRASH_RATE} exceeds 5% threshold — triggering rollback"
+
+            # Pause OTA rollout
+            curl -X POST "${{ secrets.OTA_SERVER_URL }}/api/releases/current/pause" \
+              -H "Authorization: Bearer ${{ secrets.OTA_API_KEY }}"
+
+            # Trigger rollback workflow
+            curl -X POST \
+              "https://api.github.com/repos/${{ github.repository }}/actions/workflows/production.yml/dispatches" \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Content-Type: application/json" \
+              -d '{"ref":"main","inputs":{"rollback_to":"${{ needs.version.outputs.prev_version }}"}}'
+
+            exit 1
+          fi
+
+          echo "Crash rate within threshold ✓"
