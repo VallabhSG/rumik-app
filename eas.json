@@ -68,7 +68,4 @@
       }
     }
   },
-  "update": {
-    "channel": "production"
-  }
 }
