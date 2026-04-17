@@ -76,6 +76,7 @@ const RECENT_TRACKS: Track[] = [
   { id: '1', title: 'Neon Drift', artist: 'Axel Nova', duration: '3:42' },
   { id: '2', title: 'Blue Static', artist: 'LNDN', duration: '2:58' },
   { id: '3', title: 'Ultraviolet', artist: 'Prism', duration: '4:11' },
+  { id: '4', title: 'Signal Fade', artist: 'Celeste', duration: '3:15' },
 ];
 
 const styles = StyleSheet.create({
