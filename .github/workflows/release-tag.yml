@@ -1,0 +1,84 @@
+name: Auto Release Tag
+
+# Runs after every merge to master.
+# Reads conventional commits since the last tag and bumps semver accordingly:
+#   feat:      → minor bump  (1.0.0 → 1.1.0)
+#   fix/perf:  → patch bump  (1.0.0 → 1.0.1)
+#   BREAKING CHANGE / feat!: → major bump (1.0.0 → 2.0.0)
+# Then pushes a vX.Y.Z tag and directly dispatches production.yml.
+# NOTE: Tags pushed via GITHUB_TOKEN do not trigger downstream workflows,
+# so we dispatch production.yml explicitly via the API.
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  tag:
+    name: Bump & Tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute next semver from conventional commits
+        id: semver
+        run: |
+          # Get latest tag (default 0.0.0 if none)
+          LATEST=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          MAJOR=$(echo "$LATEST" | sed 's/v//' | cut -d. -f1)
+          MINOR=$(echo "$LATEST" | sed 's/v//' | cut -d. -f2)
+          PATCH=$(echo "$LATEST" | sed 's/v//' | cut -d. -f3)
+
+          # Commits since last tag
+          COMMITS=$(git log "${LATEST}..HEAD" --pretty=format:"%s" 2>/dev/null || git log --pretty=format:"%s")
+
+          BUMP="none"
+          if echo "$COMMITS" | grep -qE "BREAKING CHANGE|^feat!|^fix!"; then
+            BUMP="major"
+          elif echo "$COMMITS" | grep -qE "^feat(\(|:)"; then
+            BUMP="minor"
+          elif echo "$COMMITS" | grep -qE "^(fix|perf)(\(|:)"; then
+            BUMP="patch"
+          fi
+
+          echo "Latest tag: $LATEST, bump: $BUMP"
+
+          if [ "$BUMP" = "major" ]; then
+            NEXT="$((MAJOR + 1)).0.0"
+          elif [ "$BUMP" = "minor" ]; then
+            NEXT="${MAJOR}.$((MINOR + 1)).0"
+          elif [ "$BUMP" = "patch" ]; then
+            NEXT="${MAJOR}.${MINOR}.$((PATCH + 1))"
+          else
+            echo "No conventional commits requiring a release — skipping tag"
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "skip=false" >> $GITHUB_OUTPUT
+          echo "tag=v${NEXT}" >> $GITHUB_OUTPUT
+          echo "version=${NEXT}" >> $GITHUB_OUTPUT
+
+      - name: Push tag
+        if: steps.semver.outputs.skip == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${{ steps.semver.outputs.tag }}"
+          git push origin "${{ steps.semver.outputs.tag }}"
+
+      - name: Dispatch production release
+        if: steps.semver.outputs.skip == 'false'
+        run: |
+          curl -X POST \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/production.yml/dispatches" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"ref":"master","inputs":{"version":"${{ steps.semver.outputs.version }}"}}'

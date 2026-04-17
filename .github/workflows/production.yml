@@ -17,6 +17,9 @@ on:
         description: Version to rollback to (leave empty for normal release)
         required: false
 
+permissions:
+  contents: write
+
 env:
   EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
@@ -27,6 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.ver.outputs.version }}
+      prev_version: ${{ steps.ver.outputs.prev_version }}
       is_rollback: ${{ steps.ver.outputs.is_rollback }}
     steps:
       - uses: actions/checkout@v4
@@ -35,6 +39,10 @@ jobs:
 
       - id: ver
         run: |
+          # Resolve previous tag for rollback reference
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          echo "prev_version=${PREV_TAG#v}" >> $GITHUB_OUTPUT
+
           if [ -n "${{ github.event.inputs.rollback_to }}" ]; then
             echo "version=${{ github.event.inputs.rollback_to }}" >> $GITHUB_OUTPUT
             echo "is_rollback=true" >> $GITHUB_OUTPUT
@@ -123,13 +131,9 @@ jobs:
             fs.writeFileSync('app.json', JSON.stringify(app, null, 2) + '\n');
           "
 
-      - name: Commit version bump
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add app.json
-          git commit -m "chore: bump version to ${{ needs.version.outputs.version }} [skip ci]"
-          git push
+      # Version bump is local only — master is protected, push requires a PAT.
+      # The git tag vX.Y.Z is the source of truth for the release version.
+      # EAS autoIncrement handles native build numbers independently.
 
   # ── OTA Update ────────────────────────────────────────────────────────────────
   ota-update:
@@ -164,6 +168,7 @@ jobs:
           EAS_UPDATE_AUTO_ROLLBACK_THRESHOLD: 0.05  # 5% crash rate triggers rollback
 
       - name: Register release with custom OTA server
+        continue-on-error: true
         run: |
           curl -X POST "${{ secrets.OTA_SERVER_URL }}/api/releases" \
             -H "Authorization: Bearer ${{ secrets.OTA_API_KEY }}" \
@@ -262,14 +267,16 @@ jobs:
           NEXT_PUBLIC_OTA_SERVER: ${{ secrets.PROD_OTA_URL }}
           NEXT_PUBLIC_CONFIG_SERVER: ${{ secrets.PROD_CONFIG_URL }}
 
+      # Vercel also auto-deploys to production via its GitHub App on push to master.
+      # This step is a manual override — continue if token not configured.
       - name: Deploy to Vercel (production)
-        uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          vercel-args: --prod
-          working-directory: dist
+        continue-on-error: true
+        run: |
+          npm install -g vercel@latest
+          vercel deploy dist --prod --token "${{ secrets.VERCEL_TOKEN }}" --yes
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
   # ── GitHub Release ────────────────────────────────────────────────────────────
   github-release:
