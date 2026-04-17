@@ -4,7 +4,7 @@ on:
   push:
     branches: [master, develop]
   pull_request:
-    branches: [master]
+    branches: [master, develop]
 
 concurrency:
   group: build-${{ github.ref }}
@@ -14,9 +14,36 @@ env:
   EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
 jobs:
-  # ── Matrix builds ────────────────────────────────────────────────────────────
-  build:
+  # ── Web export (PRs + pushes) ─────────────────────────────────────────────────
+  build-web:
+    name: Build (web)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci --prefer-offline
+
+      - name: Export web
+        run: npx expo export --platform web --output-dir dist
+        env:
+          EXPO_NO_DOTENV: 1
+
+      - name: Upload web dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist-${{ github.sha }}
+          path: dist/
+          retention-days: 7
+
+  # ── EAS builds (pushes to master/develop only — skips PRs) ───────────────────
+  build-native:
     name: Build (${{ matrix.platform }})
+    if: github.event_name == 'push'
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -28,10 +55,6 @@ jobs:
           - platform: ios
             runner: macos-14
             eas_profile: preview
-          - platform: web
-            runner: ubuntu-latest
-            eas_profile: preview
-
     steps:
       - uses: actions/checkout@v4
 
@@ -48,29 +71,14 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      # Web: local export (no EAS needed)
-      - name: Export web
-        if: matrix.platform == 'web'
-        run: npx expo export --platform web --output-dir dist
-        env:
-          EXPO_NO_DOTENV: 1
-
-      - name: Upload web dist
-        if: matrix.platform == 'web'
-        uses: actions/upload-artifact@v4
-        with:
-          name: web-dist-${{ github.sha }}
-          path: dist/
-          retention-days: 7
-
-      # Android / iOS: EAS build
+      # iOS skipped: no Apple Developer account
       - name: EAS Build (${{ matrix.platform }})
-        if: matrix.platform != 'web'
-        run: eas build --platform ${{ matrix.platform }} --profile ${{ matrix.eas_profile }} --non-interactive --no-wait
+        if: matrix.platform == 'android'
+        run: eas build --platform ${{ matrix.platform }} --profile ${{ matrix.eas_profile }} --non-interactive --wait
         env:
           EAS_BUILD_AUTOCOMMIT: 1
 
-  # ── Unit tests (fast, runs in parallel with builds) ──────────────────────────
+  # ── Unit tests ────────────────────────────────────────────────────────────────
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest
@@ -93,11 +101,11 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
-  # ── E2E tests (web) ──────────────────────────────────────────────────────────
+  # ── E2E tests (web) ───────────────────────────────────────────────────────────
   e2e-web:
     name: E2E Tests (Web)
     runs-on: ubuntu-latest
-    needs: build
+    needs: build-web
     steps:
       - uses: actions/checkout@v4
 
@@ -120,7 +128,7 @@ jobs:
       - name: Serve + run E2E
         run: |
           npx serve dist -p 3000 &
-          sleep 3
+          npx wait-on http://localhost:3000 --timeout 30000
           npx playwright test --project=chromium
         env:
           BASE_URL: http://localhost:3000
@@ -133,11 +141,11 @@ jobs:
           path: playwright-report/
           retention-days: 7
 
-  # ── Performance snapshots ────────────────────────────────────────────────────
+  # ── Performance snapshot ──────────────────────────────────────────────────────
   perf-snapshot:
     name: Performance Snapshot
     runs-on: ubuntu-latest
-    needs: build
+    needs: build-web
     steps:
       - uses: actions/checkout@v4
 
@@ -156,9 +164,9 @@ jobs:
 
       - name: Run Lighthouse CI
         run: |
-          npm install -g @lhci/cli
-          npx serve dist -p 3001 &
-          sleep 3
+          npm install -g @lhci/cli serve wait-on
+          serve dist -p 3001 &
+          wait-on http://localhost:3001 --timeout 30000
           lhci autorun
         env:
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}

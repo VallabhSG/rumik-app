@@ -67,8 +67,5 @@
         "appleTeamId": "$(APPLE_TEAM_ID)"
       }
     }
-  },
-  "update": {
-    "channel": "production"
   }
 }

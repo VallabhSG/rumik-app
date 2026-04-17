@@ -13,9 +13,11 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.crazydevvv.rumikapp"
     },
     "android": {
+      "package": "com.crazydevvv.rumikapp",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -25,6 +27,12 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "dea806b2-5e82-4c80-b836-56dbe62a4c63"
+      }
+    },
+    "owner": "crazydevvv"
   }
 }
