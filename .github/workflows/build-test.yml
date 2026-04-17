@@ -69,7 +69,7 @@ jobs:
       # and remove the platform check below.
       - name: EAS Build (${{ matrix.platform }})
         if: matrix.platform == 'android'
-        run: eas build --platform ${{ matrix.platform }} --profile ${{ matrix.eas_profile }} --non-interactive --no-wait
+        run: eas build --platform ${{ matrix.platform }} --profile ${{ matrix.eas_profile }} --non-interactive --wait
         env:
           EAS_BUILD_AUTOCOMMIT: 1
 
