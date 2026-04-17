@@ -24,4 +24,5 @@ module.exports = {
     },
   },
   coverageReporters: ['text', 'lcov', 'html'],
+  testPathIgnorePatterns: ['/node_modules/', '/e2e/'],
 };
