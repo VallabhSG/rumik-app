@@ -64,8 +64,11 @@ jobs:
           retention-days: 7
 
       # Android / iOS: EAS build
+      # SKIPPED for iOS: No Apple Developer account (signing credentials required).
+      # To enable iOS builds, add EXPO_APPLE_ID + EXPO_APPLE_APP_SPECIFIC_PASSWORD secrets
+      # and remove the platform check below.
       - name: EAS Build (${{ matrix.platform }})
-        if: matrix.platform != 'web'
+        if: matrix.platform == 'android'
         run: eas build --platform ${{ matrix.platform }} --profile ${{ matrix.eas_profile }} --non-interactive --no-wait
         env:
           EAS_BUILD_AUTOCOMMIT: 1
