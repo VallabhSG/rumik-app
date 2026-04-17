@@ -67,5 +67,5 @@
         "appleTeamId": "$(APPLE_TEAM_ID)"
       }
     }
-  },
+  }
 }

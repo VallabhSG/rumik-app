@@ -27,6 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.ver.outputs.version }}
+      prev_version: ${{ steps.ver.outputs.prev_version }}
       is_rollback: ${{ steps.ver.outputs.is_rollback }}
     steps:
       - uses: actions/checkout@v4
@@ -35,6 +36,10 @@ jobs:
 
       - id: ver
         run: |
+          # Resolve previous tag for rollback reference
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          echo "prev_version=${PREV_TAG#v}" >> $GITHUB_OUTPUT
+
           if [ -n "${{ github.event.inputs.rollback_to }}" ]; then
             echo "version=${{ github.event.inputs.rollback_to }}" >> $GITHUB_OUTPUT
             echo "is_rollback=true" >> $GITHUB_OUTPUT
