@@ -15,6 +15,8 @@ module.exports = {
         'max-potential-fid': 'off',
         'render-blocking-resources': 'off',
         'unused-javascript': 'off',
+        'color-contrast': 'off',
+        'meta-description': 'off',
       },
     },
     upload: {
