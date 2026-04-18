@@ -1,12 +1,12 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { LaunchRecord } from './types';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import type { LaunchRecord } from "./types";
 
 const KEYS = {
-  INSTALL_ID:       'ota:install_id',
-  SESSION_OPEN:     'ota:session_open',     // written at launch, cleared on graceful exit
-  CURRENT_VERSION:  'ota:current_version',
-  PREVIOUS_VERSION: 'ota:previous_version',
-  LAUNCH_RECORDS:   'ota:launch_records',   // Record<version, LaunchRecord>
+  INSTALL_ID: "ota:install_id",
+  SESSION_OPEN: "ota:session_open", // written at launch, cleared on graceful exit
+  CURRENT_VERSION: "ota:current_version",
+  PREVIOUS_VERSION: "ota:previous_version",
+  LAUNCH_RECORDS: "ota:launch_records", // Record<version, LaunchRecord>
 } as const;
 
 interface SessionMark {
@@ -23,7 +23,10 @@ export const storage = {
   markSessionOpen: (version: string) =>
     AsyncStorage.setItem(
       KEYS.SESSION_OPEN,
-      JSON.stringify({ version, at: new Date().toISOString() } satisfies SessionMark),
+      JSON.stringify({
+        version,
+        at: new Date().toISOString(),
+      } satisfies SessionMark),
     ),
   clearSessionOpen: () => AsyncStorage.removeItem(KEYS.SESSION_OPEN),
   getSessionOpen: async (): Promise<SessionMark | null> => {
@@ -33,9 +36,11 @@ export const storage = {
 
   // Current / previous bundle version for rollback bookkeeping
   getCurrentVersion: () => AsyncStorage.getItem(KEYS.CURRENT_VERSION),
-  setCurrentVersion: (v: string) => AsyncStorage.setItem(KEYS.CURRENT_VERSION, v),
+  setCurrentVersion: (v: string) =>
+    AsyncStorage.setItem(KEYS.CURRENT_VERSION, v),
   getPreviousVersion: () => AsyncStorage.getItem(KEYS.PREVIOUS_VERSION),
-  setPreviousVersion: (v: string) => AsyncStorage.setItem(KEYS.PREVIOUS_VERSION, v),
+  setPreviousVersion: (v: string) =>
+    AsyncStorage.setItem(KEYS.PREVIOUS_VERSION, v),
 
   // Per-version launch / crash counters
   getLaunchRecords: async (): Promise<Record<string, LaunchRecord>> => {

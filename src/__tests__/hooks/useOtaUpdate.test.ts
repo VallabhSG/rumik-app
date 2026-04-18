@@ -9,32 +9,31 @@ const mockDownloadAndStage = jest.fn().mockResolvedValue("ready");
 const mockApplyNow = jest.fn().mockResolvedValue(undefined);
 const mockDestroy = jest.fn();
 
+// Capture onStatus so tests can invoke it directly
+let capturedOnStatus: ((s: string) => void) | null = null;
+
 jest.mock("../../services/ota/OtaClient", () => ({
   OtaClient: jest
     .fn()
-    .mockImplementation((_config: unknown, onStatus: (s: string) => void) => ({
-      initialize: mockInitialize,
-      checkForUpdate: mockCheckForUpdate,
-      downloadAndStage: mockDownloadAndStage,
-      applyNow: mockApplyNow,
-      destroy: mockDestroy,
-      _onStatus: onStatus,
-    })),
+    .mockImplementation((_config: unknown, onStatus: (s: string) => void) => {
+      capturedOnStatus = onStatus;
+      return {
+        initialize: mockInitialize,
+        checkForUpdate: mockCheckForUpdate,
+        downloadAndStage: mockDownloadAndStage,
+        applyNow: mockApplyNow,
+        destroy: mockDestroy,
+      };
+    }),
 }));
 
 jest.mock("expo-application", () => ({
   nativeApplicationVersion: "1.0.0",
 }));
 
-// Expose __onStatus from the mock instance so tests can call it
-function getOnStatus(): (s: string) => void {
-  const { OtaClient } = require("../../services/ota/OtaClient");
-  const instances = (OtaClient as jest.Mock).mock.results;
-  return instances[instances.length - 1]?.value?._onStatus;
-}
-
 beforeEach(() => {
   jest.clearAllMocks();
+  capturedOnStatus = null;
   // Restore default resolved values
   mockInitialize.mockResolvedValue(undefined);
   mockCheckForUpdate.mockResolvedValue("up-to-date");
@@ -77,7 +76,7 @@ describe("useOtaUpdate", () => {
     });
 
     act(() => {
-      getOnStatus()("available");
+      capturedOnStatus!("available");
     });
 
     expect(result.current.status).toBe("available");

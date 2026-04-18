@@ -1,5 +1,5 @@
-import { AppState, type AppStateStatus } from 'react-native';
-import { storage } from './storage';
+import { AppState, type AppStateStatus } from "react-native";
+import { storage } from "./storage";
 
 type CrashCallback = (version: string, crashRate: number) => void;
 
@@ -20,8 +20,10 @@ export class CrashTracker {
   private onThresholdExceeded: CrashCallback;
   private threshold: number;
   private minLaunches: number;
-  private appStateSub: ReturnType<typeof AppState.addEventListener> | null = null;
-  private prevErrorHandler: ((error: Error, isFatal?: boolean) => void) | null = null;
+  private appStateSub: ReturnType<typeof AppState.addEventListener> | null =
+    null;
+  private prevErrorHandler: ((error: Error, isFatal?: boolean) => void) | null =
+    null;
 
   constructor(
     version: string,
@@ -47,7 +49,10 @@ export class CrashTracker {
     await storage.markSessionOpen(this.version);
 
     // Clear marker on graceful background transition
-    this.appStateSub = AppState.addEventListener('change', this.onAppStateChange);
+    this.appStateSub = AppState.addEventListener(
+      "change",
+      this.onAppStateChange,
+    );
 
     // --- JS fatal error handler ---
     this.prevErrorHandler = ErrorUtils.getGlobalHandler();
@@ -60,9 +65,9 @@ export class CrashTracker {
   }
 
   private onAppStateChange = async (state: AppStateStatus): Promise<void> => {
-    if (state === 'background' || state === 'inactive') {
+    if (state === "background" || state === "inactive") {
       await storage.clearSessionOpen();
-    } else if (state === 'active') {
+    } else if (state === "active") {
       // Re-open the marker if the app comes back to foreground within the same process
       await storage.markSessionOpen(this.version);
     }
@@ -70,7 +75,12 @@ export class CrashTracker {
 
   private async incrementCrashCount(version: string): Promise<void> {
     const records = await storage.getLaunchRecords();
-    const rec = records[version] ?? { version, launchCount: 0, crashCount: 0, lastCrashAt: null };
+    const rec = records[version] ?? {
+      version,
+      launchCount: 0,
+      crashCount: 0,
+      lastCrashAt: null,
+    };
     records[version] = {
       ...rec,
       crashCount: rec.crashCount + 1,
@@ -79,7 +89,11 @@ export class CrashTracker {
     await storage.setLaunchRecords(records);
 
     // Evaluate threshold after recording
-    await this.evaluate(version, records[version].launchCount, records[version].crashCount);
+    await this.evaluate(
+      version,
+      records[version].launchCount,
+      records[version].crashCount,
+    );
   }
 
   async recordLaunch(): Promise<void> {
@@ -94,10 +108,13 @@ export class CrashTracker {
     await storage.setLaunchRecords(records);
   }
 
-  async getStats(version: string): Promise<{ launchCount: number; crashCount: number; crashRate: number }> {
+  async getStats(
+    version: string,
+  ): Promise<{ launchCount: number; crashCount: number; crashRate: number }> {
     const records = await storage.getLaunchRecords();
     const rec = records[version];
-    if (!rec || rec.launchCount === 0) return { launchCount: 0, crashCount: 0, crashRate: 0 };
+    if (!rec || rec.launchCount === 0)
+      return { launchCount: 0, crashCount: 0, crashRate: 0 };
     return {
       launchCount: rec.launchCount,
       crashCount: rec.crashCount,
@@ -105,7 +122,11 @@ export class CrashTracker {
     };
   }
 
-  private async evaluate(version: string, launchCount: number, crashCount: number): Promise<void> {
+  private async evaluate(
+    version: string,
+    launchCount: number,
+    crashCount: number,
+  ): Promise<void> {
     if (launchCount < this.minLaunches) return;
     const crashRate = crashCount / launchCount;
     if (crashRate > this.threshold) {

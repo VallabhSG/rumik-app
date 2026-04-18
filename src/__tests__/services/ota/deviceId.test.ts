@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 describe("getInstallId", () => {
   afterEach(() => {
     jest.resetModules();
@@ -12,10 +13,8 @@ describe("getInstallId", () => {
       },
     }));
 
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const AsyncStorage =
       require("@react-native-async-storage/async-storage").default;
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { getInstallId } = require("../../../services/ota/deviceId");
 
     const id = await getInstallId();
@@ -34,10 +33,8 @@ describe("getInstallId", () => {
       },
     }));
 
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const AsyncStorage =
       require("@react-native-async-storage/async-storage").default;
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { getInstallId } = require("../../../services/ota/deviceId");
 
     const id = await getInstallId();

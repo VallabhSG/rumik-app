@@ -1,5 +1,11 @@
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+} from "react-native";
 import { useOtaUpdate } from "../hooks/useOtaUpdate";
 
 /**

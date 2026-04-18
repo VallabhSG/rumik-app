@@ -26,7 +26,7 @@ export interface OtaConfig {
   serverUrl: string;
   apiKey: string;
   channel: string;
-  platform: 'ios' | 'android';
+  platform: "ios" | "android";
   nativeVersion: string;
   /**
    * Fraction 0.0–1.0. Crash rate above this triggers auto-rollback.
@@ -48,18 +48,18 @@ export interface RolloutStage {
 }
 
 export const DEFAULT_ROLLOUT_STAGES: RolloutStage[] = [
-  { percentage: 5,   minHoursAtStage: 1  },
-  { percentage: 25,  minHoursAtStage: 4  },
-  { percentage: 50,  minHoursAtStage: 12 },
-  { percentage: 100, minHoursAtStage: 0  },
+  { percentage: 5, minHoursAtStage: 1 },
+  { percentage: 25, minHoursAtStage: 4 },
+  { percentage: 50, minHoursAtStage: 12 },
+  { percentage: 100, minHoursAtStage: 0 },
 ];
 
 export type UpdateStatus =
-  | 'idle'
-  | 'checking'
-  | 'not-in-rollout'
-  | 'up-to-date'
-  | 'available'
-  | 'downloading'
-  | 'ready'
-  | 'error';
+  | "idle"
+  | "checking"
+  | "not-in-rollout"
+  | "up-to-date"
+  | "available"
+  | "downloading"
+  | "ready"
+  | "error";

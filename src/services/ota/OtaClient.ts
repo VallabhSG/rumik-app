@@ -1,10 +1,10 @@
-import * as Updates from 'expo-updates';
-import * as Application from 'expo-application';
-import type { OtaConfig, OtaRelease, UpdateStatus } from './types';
-import { storage } from './storage';
-import { getInstallId } from './deviceId';
-import { isInRollout } from './rollout';
-import { CrashTracker } from './crashTracker';
+import * as Updates from "expo-updates";
+import * as Application from "expo-application";
+import type { OtaConfig, OtaRelease, UpdateStatus } from "./types";
+import { storage } from "./storage";
+import { getInstallId } from "./deviceId";
+import { isInRollout } from "./rollout";
+import { CrashTracker } from "./crashTracker";
 
 type StatusCallback = (status: UpdateStatus) => void;
 
@@ -77,7 +77,7 @@ export class OtaClient {
    * Returns the new status.
    */
   async checkForUpdate(): Promise<UpdateStatus> {
-    this.onStatus('checking');
+    this.onStatus("checking");
 
     try {
       const [installId, nativeVersion] = await Promise.all([
@@ -89,29 +89,29 @@ export class OtaClient {
 
       const release = await this.fetchCurrentRelease(nativeVersion);
       if (!release) {
-        this.onStatus('up-to-date');
-        return 'up-to-date';
+        this.onStatus("up-to-date");
+        return "up-to-date";
       }
 
       // Rollout gate — deterministic per device × release
       if (!isInRollout(installId, release.id, release.rollout_percentage)) {
-        this.onStatus('not-in-rollout');
-        return 'not-in-rollout';
+        this.onStatus("not-in-rollout");
+        return "not-in-rollout";
       }
 
       // Already on this version?
       const current = await this.resolveCurrentVersion();
       if (current === release.version) {
-        this.onStatus('up-to-date');
-        return 'up-to-date';
+        this.onStatus("up-to-date");
+        return "up-to-date";
       }
 
-      this.onStatus('available');
-      return 'available';
+      this.onStatus("available");
+      return "available";
     } catch (err) {
-      console.error('[OTA] checkForUpdate error:', err);
-      this.onStatus('error');
-      return 'error';
+      console.error("[OTA] checkForUpdate error:", err);
+      this.onStatus("error");
+      return "error";
     }
   }
 
@@ -124,13 +124,13 @@ export class OtaClient {
    * Persists previous / next version for crash-safe rollback bookkeeping.
    */
   async downloadAndStage(): Promise<UpdateStatus> {
-    this.onStatus('downloading');
+    this.onStatus("downloading");
 
     try {
       const check = await Updates.checkForUpdateAsync();
       if (!check.isAvailable) {
-        this.onStatus('up-to-date');
-        return 'up-to-date';
+        this.onStatus("up-to-date");
+        return "up-to-date";
       }
 
       // Background download — expo-updates writes to its own cache directory.
@@ -139,19 +139,20 @@ export class OtaClient {
 
       // Bookkeeping for crash-safe rollback
       const prev = await this.resolveCurrentVersion();
-      const nativeVersion = Application.nativeApplicationVersion ?? this.config.nativeVersion;
+      const nativeVersion =
+        Application.nativeApplicationVersion ?? this.config.nativeVersion;
       const release = await this.fetchCurrentRelease(nativeVersion);
       if (release) {
         await storage.setPreviousVersion(prev);
         await storage.setCurrentVersion(release.version);
       }
 
-      this.onStatus('ready');
-      return 'ready';
+      this.onStatus("ready");
+      return "ready";
     } catch (err) {
-      console.error('[OTA] downloadAndStage error:', err);
-      this.onStatus('error');
-      return 'error';
+      console.error("[OTA] downloadAndStage error:", err);
+      this.onStatus("error");
+      return "error";
     }
   }
 
@@ -188,10 +189,13 @@ export class OtaClient {
     await Updates.reloadAsync();
   };
 
-  private async reportCrashRate(version: string, crashRate: number): Promise<void> {
+  private async reportCrashRate(
+    version: string,
+    crashRate: number,
+  ): Promise<void> {
     try {
       await fetch(`${this.config.serverUrl}/api/crash-rate`, {
-        method: 'POST',
+        method: "POST",
         headers: this.authHeaders(),
         body: JSON.stringify({
           crash_rate: crashRate,
@@ -211,13 +215,13 @@ export class OtaClient {
   ): Promise<void> {
     try {
       await fetch(`${this.config.serverUrl}/api/rollbacks`, {
-        method: 'POST',
+        method: "POST",
         headers: this.authHeaders(),
         body: JSON.stringify({
-          target_version: targetVersion ?? 'unknown',
+          target_version: targetVersion ?? "unknown",
           reason: `Auto-rollback: crash rate ${(crashRate * 100).toFixed(0)}% on v${fromVersion}`,
           channels: this.config.channel,
-          triggered_by: 'client-crash-detector',
+          triggered_by: "client-crash-detector",
         }),
       });
     } catch {
@@ -229,7 +233,9 @@ export class OtaClient {
   // Helpers
   // ---------------------------------------------------------------------------
 
-  private async fetchCurrentRelease(nativeVersion: string): Promise<OtaRelease | null> {
+  private async fetchCurrentRelease(
+    nativeVersion: string,
+  ): Promise<OtaRelease | null> {
     const params = new URLSearchParams({
       channel: this.config.channel,
       platform: this.config.platform,
@@ -253,16 +259,14 @@ export class OtaClient {
     const stored = await storage.getCurrentVersion();
     if (stored) return stored;
     return (
-      Updates.runtimeVersion ??
-      Application.nativeApplicationVersion ??
-      '0.0.0'
+      Updates.runtimeVersion ?? Application.nativeApplicationVersion ?? "0.0.0"
     );
   }
 
   private authHeaders(): Record<string, string> {
     return {
       Authorization: `Bearer ${this.config.apiKey}`,
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     };
   }
 }

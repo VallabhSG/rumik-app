@@ -1,6 +1,6 @@
 import { OtaClient } from "../../../services/ota/OtaClient";
 import * as Updates from "expo-updates";
-import * as Application from "expo-application";
+
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // ---------------------------------------------------------------------------

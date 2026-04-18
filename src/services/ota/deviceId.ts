@@ -1,9 +1,9 @@
-import { storage } from './storage';
+import { storage } from "./storage";
 
-const CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789';
+const CHARS = "abcdefghijklmnopqrstuvwxyz0123456789";
 
 function randomId(length = 32): string {
-  let id = '';
+  let id = "";
   for (let i = 0; i < length; i++) {
     id += CHARS[Math.floor(Math.random() * CHARS.length)];
   }
