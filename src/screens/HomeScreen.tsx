@@ -8,7 +8,12 @@ import {
   SafeAreaView,
 } from "react-native";
 import Constants from "expo-constants";
-import { useFeatureFlag, useKillSwitch, useExperiment, useDynamicUrl } from "../hooks/useRemoteConfig";
+import {
+  useFeatureFlag,
+  useKillSwitch,
+  useExperiment,
+  useDynamicUrl,
+} from "../hooks/useRemoteConfig";
 import { useOta } from "../contexts/OtaContext";
 
 interface Props {
@@ -30,19 +35,39 @@ export default function HomeScreen({ onNavigate }: Props) {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={[styles.header, taglineVariant === "bold" && styles.headerBold]}>
+        <View
+          style={[
+            styles.header,
+            taglineVariant === "bold" && styles.headerBold,
+          ]}
+        >
           <View style={styles.versionBadge}>
             <Text style={styles.versionBadgeText}>
               v{Constants.expoConfig?.version ?? "—"}
-              {(otaStatus === "available" || otaStatus === "ready") ? " ✦ NEW" : ""}
+              {otaStatus === "available" || otaStatus === "ready"
+                ? " ✦ NEW"
+                : ""}
             </Text>
           </View>
-          <Text style={[styles.logo, taglineVariant === "bold" && styles.logoBold]}>rumik</Text>
-          <Text style={[styles.tagline, taglineVariant === "bold" && styles.taglineBold]}>
-            {taglineVariant === "bold" ? "YOUR SOUND. YOUR WORLD." : "feel the music"}
+          <Text
+            style={[styles.logo, taglineVariant === "bold" && styles.logoBold]}
+          >
+            rumik
+          </Text>
+          <Text
+            style={[
+              styles.tagline,
+              taglineVariant === "bold" && styles.taglineBold,
+            ]}
+          >
+            {taglineVariant === "bold"
+              ? "YOUR SOUND. YOUR WORLD."
+              : "feel the music"}
           </Text>
           <Text style={styles.variantBadge}>
-            {taglineVariant === "bold" ? "🅱 bold variant" : "🅰 control variant"}
+            {taglineVariant === "bold"
+              ? "🅱 bold variant"
+              : "🅰 control variant"}
           </Text>
         </View>
 
@@ -105,7 +130,9 @@ export default function HomeScreen({ onNavigate }: Props) {
 
         <View style={styles.configRow} testID="config-api-url">
           <Text style={styles.configLabel}>API</Text>
-          <Text style={styles.configValue} numberOfLines={1}>{apiUrl}</Text>
+          <Text style={styles.configValue} numberOfLines={1}>
+            {apiUrl}
+          </Text>
         </View>
       </ScrollView>
     </SafeAreaView>

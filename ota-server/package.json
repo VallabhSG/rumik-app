@@ -7,19 +7,28 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "test": "jest",
+    "test:coverage": "jest --coverage"
   },
   "dependencies": {
-    "better-sqlite3": "^9.6.0",
+    "better-sqlite3": "^12.9.0",
     "express": "^4.19.2",
     "uuid": "^9.0.1",
+    "ws": "^8.20.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.10",
     "@types/express": "^4.17.21",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20.14.0",
+    "@types/supertest": "^7.2.0",
     "@types/uuid": "^9.0.8",
+    "@types/ws": "^8.18.1",
+    "jest": "^30.3.0",
+    "supertest": "^7.2.2",
+    "ts-jest": "^29.4.9",
     "tsx": "^4.15.6",
     "typescript": "^5.4.5"
   }

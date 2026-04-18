@@ -11,14 +11,7 @@
  *   - Two different releases hash independently, so a device can be in the
  *     rollout for one release and not another
  */
-function djb2(str: string): number {
-  let hash = 5381;
-  for (let i = 0; i < str.length; i++) {
-    // (hash * 33) XOR char — keep as unsigned 32-bit
-    hash = (((hash << 5) + hash) ^ str.charCodeAt(i)) >>> 0;
-  }
-  return hash;
-}
+import { djb2 } from "../../utils/hash";
 
 export function isInRollout(
   installId: string,

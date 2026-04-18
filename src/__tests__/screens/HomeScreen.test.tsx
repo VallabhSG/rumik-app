@@ -2,6 +2,13 @@ import React from "react";
 import { render, fireEvent } from "@testing-library/react-native";
 import HomeScreen from "../../screens/HomeScreen";
 
+// HomeScreen uses remote config hooks — mock them with safe defaults so
+// unit tests don't need a real provider.
+jest.mock("../../hooks/useRemoteConfig", () => ({
+  useFeatureFlag: jest.fn(() => false),
+  useKillSwitch: jest.fn(() => false),
+}));
+
 describe("HomeScreen", () => {
   it("renders logo and tagline", () => {
     const { getByText } = render(<HomeScreen />);

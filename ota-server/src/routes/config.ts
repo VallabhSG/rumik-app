@@ -1,0 +1,107 @@
+import { Router } from 'express';
+import { z } from 'zod';
+import db from '../db.js';
+import { djb2 } from '../utils/hash.js';
+import { evaluateTargeting, parseTargeting } from '../services/targeting.js';
+import type { DeviceContext } from '../services/targeting.js';
+
+const router = Router();
+
+const QuerySchema = z.object({
+  platform: z.enum(['ios', 'android', 'web']),
+  native_version: z.string().min(1),
+  install_id: z.string().min(1),
+});
+
+interface FlagRow { id: string; key: string; enabled: number; targeting: string | null; }
+interface ExperimentRow { id: string; key: string; status: string; variants: string; targeting: string | null; }
+interface UrlRow { id: string; key: string; value: string; targeting: string | null; }
+interface KillSwitchRow { id: string; key: string; active: number; }
+interface AssignmentRow { variant_id: string; }
+
+/**
+ * GET /api/config
+ * Returns a fully-resolved config snapshot for the given device context.
+ * All targeting rules are evaluated server-side.
+ */
+router.get('/', (req, res) => {
+  const result = QuerySchema.safeParse(req.query);
+  if (!result.success) {
+    return res.status(400).json({ success: false, error: result.error.flatten() });
+  }
+  const { platform, native_version, install_id } = result.data;
+
+  // ── Feature flags ──────────────────────────────────────────────────────────
+  const flagRows = db.prepare('SELECT id, key, enabled, targeting FROM feature_flags').all() as FlagRow[];
+  const flags: Record<string, boolean> = {};
+  for (const flag of flagRows) {
+    const ctx: DeviceContext = { platform, nativeVersion: native_version, installId: install_id, entityKey: flag.key };
+    const inTargeting = evaluateTargeting(parseTargeting(flag.targeting), ctx);
+    flags[flag.key] = flag.enabled === 1 && inTargeting;
+  }
+
+  // ── Experiments ────────────────────────────────────────────────────────────
+  const expRows = db.prepare("SELECT id, key, status, variants, targeting FROM experiments WHERE status = 'active'").all() as ExperimentRow[];
+  const experiments: Record<string, string> = {};
+  for (const exp of expRows) {
+    const ctx: DeviceContext = { platform, nativeVersion: native_version, installId: install_id, entityKey: exp.key };
+    if (!evaluateTargeting(parseTargeting(exp.targeting), ctx)) continue;
+
+    // Check for existing stable assignment
+    const existing = db.prepare(
+      'SELECT variant_id FROM experiment_assignments WHERE install_id = ? AND experiment_id = ?'
+    ).get(install_id, exp.id) as AssignmentRow | undefined;
+
+    if (existing) {
+      experiments[exp.key] = existing.variant_id;
+      continue;
+    }
+
+    // Assign variant using weighted DJB2 bucketing
+    const variants = JSON.parse(exp.variants) as Array<{ id: string; weight: number }>;
+    const totalWeight = variants.reduce((sum, v) => sum + v.weight, 0);
+    if (totalWeight <= 0) continue;
+
+    const bucket = djb2(install_id + exp.key) % totalWeight;
+    let cumulative = 0;
+    let assignedVariant = variants[0].id;
+    for (const v of variants) {
+      cumulative += v.weight;
+      if (bucket < cumulative) { assignedVariant = v.id; break; }
+    }
+
+    // Persist the assignment so it's stable across weight changes
+    const now = new Date().toISOString();
+    db.prepare(
+      'INSERT INTO experiment_assignments (install_id, experiment_id, variant_id, assigned_at) VALUES (?, ?, ?, ?)'
+    ).run(install_id, exp.id, assignedVariant, now);
+
+    experiments[exp.key] = assignedVariant;
+  }
+
+  // ── Dynamic URLs ──────────────────────────────────────────────────────────
+  const urlRows = db.prepare('SELECT id, key, value, targeting FROM dynamic_urls').all() as UrlRow[];
+  const urls: Record<string, string> = {};
+  for (const url of urlRows) {
+    const ctx: DeviceContext = { platform, nativeVersion: native_version, installId: install_id, entityKey: url.key };
+    if (evaluateTargeting(parseTargeting(url.targeting), ctx)) {
+      urls[url.key] = url.value;
+    }
+  }
+
+  // ── Kill switches ─────────────────────────────────────────────────────────
+  const ksRows = db.prepare('SELECT key, active FROM kill_switches').all() as KillSwitchRow[];
+  const kill_switches: Record<string, boolean> = {};
+  for (const ks of ksRows) {
+    kill_switches[ks.key] = ks.active === 1;
+  }
+
+  // ── Version fingerprint ───────────────────────────────────────────────────
+  const ttl = Number(process.env.CONFIG_TTL_SECONDS ?? 300);
+  const responseData = { flags, experiments, urls, kill_switches, ttl };
+  const version = djb2(JSON.stringify(responseData)).toString(16);
+
+  return res.json({ success: true, data: { ...responseData, version } });
+});
+
+export default router;
