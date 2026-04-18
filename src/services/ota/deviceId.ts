@@ -20,13 +20,20 @@ let cached: string | null = null;
  */
 export async function getInstallId(): Promise<string> {
   if (cached) return cached;
-  const stored = await storage.getInstallId();
-  if (stored) {
-    cached = stored;
-    return stored;
+  try {
+    const stored = await storage.getInstallId();
+    if (stored) {
+      cached = stored;
+      return stored;
+    }
+    const id = randomId();
+    await storage.setInstallId(id);
+    cached = id;
+    return id;
+  } catch {
+    // AsyncStorage unavailable — generate a session-scoped ID (not persisted)
+    const id = randomId();
+    cached = id;
+    return id;
   }
-  const id = randomId();
-  await storage.setInstallId(id);
-  cached = id;
-  return id;
 }

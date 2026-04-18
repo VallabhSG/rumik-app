@@ -62,6 +62,7 @@ export function useOtaUpdate(): OtaUpdateState {
     if (Platform.OS === "web") return;
 
     const config = buildConfig();
+    console.log("[OTA] serverUrl:", config.serverUrl, "platform:", config.platform);
     if (!config.serverUrl) return; // not configured in this environment
 
     const client = new OtaClient(config, (s) => {
@@ -73,9 +74,11 @@ export function useOtaUpdate(): OtaUpdateState {
     client
       .initialize()
       .then(() => client.checkForUpdate())
+      .then((result) => console.log("[OTA] checkForUpdate result:", result))
       .catch((err: unknown) => {
         const msg =
           err instanceof Error ? err.message : "OTA initialization failed";
+        console.error("[OTA] fatal error:", msg);
         setError(msg);
         setStatus("error");
       });
