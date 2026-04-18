@@ -62,7 +62,12 @@ export function useOtaUpdate(): OtaUpdateState {
     if (Platform.OS === "web") return;
 
     const config = buildConfig();
-    console.log("[OTA] serverUrl:", config.serverUrl, "platform:", config.platform);
+    console.log(
+      "[OTA] serverUrl:",
+      config.serverUrl,
+      "platform:",
+      config.platform,
+    );
     if (!config.serverUrl) return; // not configured in this environment
 
     const client = new OtaClient(config, (s) => {
