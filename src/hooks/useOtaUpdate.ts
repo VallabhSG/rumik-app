@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Platform } from "react-native";
+import { Platform, AppState, type AppStateStatus } from "react-native";
 import * as Application from "expo-application";
 import { OtaClient } from "../services/ota/OtaClient";
 import type { OtaConfig, UpdateStatus } from "../services/ota/types";
@@ -11,7 +11,7 @@ function buildConfig(): OtaConfig {
     channel: process.env.EXPO_PUBLIC_OTA_CHANNEL ?? "production",
     platform: Platform.OS as "ios" | "android",
     nativeVersion: Application.nativeApplicationVersion ?? "1.0.0",
-    crashThreshold: 0.5, // 50% crash rate → auto-rollback
+    crashThreshold: 0.05, // 5% crash rate → auto-rollback
     minLaunchesBeforeRollback: 3, // evaluate only after ≥3 launches
   };
 }
@@ -88,7 +88,24 @@ export function useOtaUpdate(): OtaUpdateState {
         setStatus("error");
       });
 
+    // Re-check every 30 s so a server-side rollback clears the banner
+    // without needing an app reload.
+    const interval = setInterval(() => {
+      clientRef.current?.checkForUpdate().catch(() => {});
+    }, 30_000);
+
+    // Also re-check immediately when the app returns to foreground —
+    // this is when rollback should be reflected with no perceptible delay.
+    const onForeground = (state: AppStateStatus) => {
+      if (state === "active") {
+        clientRef.current?.checkForUpdate().catch(() => {});
+      }
+    };
+    const appStateSub = AppState.addEventListener("change", onForeground);
+
     return () => {
+      clearInterval(interval);
+      appStateSub.remove();
       client.destroy();
       clientRef.current = null;
     };
