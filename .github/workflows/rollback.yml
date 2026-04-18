@@ -17,6 +17,10 @@ on:
 env:
   EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
+permissions:
+  issues: write
+  contents: read
+
 jobs:
   rollback:
     name: Execute Rollback to v${{ github.event.inputs.version }}
