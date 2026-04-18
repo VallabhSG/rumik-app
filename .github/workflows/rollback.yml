@@ -50,6 +50,7 @@ jobs:
 
       # Pause current rollout first
       - name: Pause current OTA rollout
+        continue-on-error: true  # optional — requires OTA_SERVER_URL secret
         run: |
           curl -X POST "${{ secrets.OTA_SERVER_URL }}/api/releases/current/pause" \
             -H "Authorization: Bearer ${{ secrets.OTA_API_KEY }}" \
@@ -68,6 +69,7 @@ jobs:
 
       # Register rollback with custom OTA server
       - name: Register rollback with OTA server
+        continue-on-error: true  # optional — requires OTA_SERVER_URL secret
         run: |
           curl -X POST "${{ secrets.OTA_SERVER_URL }}/api/rollbacks" \
             -H "Authorization: Bearer ${{ secrets.OTA_API_KEY }}" \
@@ -106,6 +108,7 @@ jobs:
 
       - name: Notify (Slack)
         if: always()
+        continue-on-error: true  # optional — requires SLACK_WEBHOOK secret
         run: |
           curl -X POST "${{ secrets.SLACK_WEBHOOK }}" \
             -H "Content-Type: application/json" \
