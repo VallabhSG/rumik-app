@@ -3,6 +3,7 @@ import React, {
   useContext,
   useEffect,
   useRef,
+  useState,
   useSyncExternalStore,
 } from "react";
 import { Platform } from "react-native";
@@ -32,11 +33,7 @@ export function RemoteConfigProvider({
   apiKey,
   children,
 }: RemoteConfigProviderProps) {
-  const clientRef = useRef<ConfigClient | null>(null);
-
-  if (!clientRef.current) {
-    // Build options synchronously with best-effort installId
-    // (getInstallId is async — we seed with a temp value and let initialize() overwrite)
+  const [client] = useState<ConfigClient>(() => {
     const options: ConfigClientOptions = {
       serverUrl,
       apiKey,
@@ -44,29 +41,28 @@ export function RemoteConfigProvider({
       nativeVersion: Application.nativeApplicationVersion ?? "1.0.0",
       installId: "pending",
     };
-    clientRef.current = new ConfigClient(options);
-  }
+    return new ConfigClient(options);
+  });
+
+  // Keep a ref for the effect cleanup — safe to access in effects/handlers
+  const clientRef = useRef(client);
 
   useEffect(() => {
-    const client = clientRef.current!;
-
     // Resolve the installId before initializing
     getInstallId()
       .then((id) => {
-        // Patch the installId now that it's available, then initialize
-        // @ts-expect-error — patching private field in effect only
         (
-          client as unknown as { options: ConfigClientOptions }
+          clientRef.current as unknown as { options: ConfigClientOptions }
         ).options.installId = id;
-        return client.initialize();
+        return clientRef.current.initialize();
       })
-      .catch(() => client.initialize());
+      .catch(() => clientRef.current.initialize());
 
-    return () => client.destroy();
+    return () => clientRef.current.destroy();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <ConfigClientContext.Provider value={clientRef.current}>
+    <ConfigClientContext.Provider value={client}>
       {children}
     </ConfigClientContext.Provider>
   );

@@ -20,6 +20,15 @@ jest.mock("../../src/services/ota/deviceId", () => ({
   getInstallId: jest.fn().mockResolvedValue("test-id"),
 }));
 
+jest.mock("../../src/hooks/useOtaUpdate", () => ({
+  useOtaUpdate: jest.fn(() => ({
+    status: "idle",
+    error: null,
+    download: jest.fn(),
+    applyNow: jest.fn(),
+  })),
+}));
+
 // Smoke test — ensures App renders without crashing
 describe("App", () => {
   it("renders without crashing", () => {

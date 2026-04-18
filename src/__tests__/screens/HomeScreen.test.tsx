@@ -7,6 +7,17 @@ import HomeScreen from "../../screens/HomeScreen";
 jest.mock("../../hooks/useRemoteConfig", () => ({
   useFeatureFlag: jest.fn(() => false),
   useKillSwitch: jest.fn(() => false),
+  useExperiment: jest.fn(() => "control"),
+  useDynamicUrl: jest.fn((_key: string, def: string) => def),
+}));
+
+jest.mock("../../contexts/OtaContext", () => ({
+  useOta: jest.fn(() => ({
+    status: "idle",
+    error: null,
+    download: jest.fn(),
+    applyNow: jest.fn(),
+  })),
 }));
 
 describe("HomeScreen", () => {

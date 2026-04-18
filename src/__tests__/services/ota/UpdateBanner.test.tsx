@@ -1,15 +1,15 @@
 import React from "react";
 import { render, fireEvent } from "@testing-library/react-native";
 import { UpdateBanner } from "../../../components/UpdateBanner";
-import * as useOtaUpdateModule from "../../../hooks/useOtaUpdate";
+import * as OtaContextModule from "../../../contexts/OtaContext";
 
-jest.mock("../../../hooks/useOtaUpdate");
+jest.mock("../../../contexts/OtaContext");
 
-const mockUseOtaUpdate = useOtaUpdateModule.useOtaUpdate as jest.Mock;
+const mockUseOta = OtaContextModule.useOta as jest.Mock;
 
 describe("UpdateBanner", () => {
   it("renders nothing when status is idle", () => {
-    mockUseOtaUpdate.mockReturnValue({
+    mockUseOta.mockReturnValue({
       status: "idle",
       error: null,
       download: jest.fn(),
@@ -20,7 +20,7 @@ describe("UpdateBanner", () => {
   });
 
   it("renders nothing when up-to-date", () => {
-    mockUseOtaUpdate.mockReturnValue({
+    mockUseOta.mockReturnValue({
       status: "up-to-date",
       error: null,
       download: jest.fn(),
@@ -32,7 +32,7 @@ describe("UpdateBanner", () => {
 
   it("shows download button when available", () => {
     const download = jest.fn();
-    mockUseOtaUpdate.mockReturnValue({
+    mockUseOta.mockReturnValue({
       status: "available",
       error: null,
       download,
@@ -45,7 +45,7 @@ describe("UpdateBanner", () => {
   });
 
   it("shows spinner when downloading", () => {
-    mockUseOtaUpdate.mockReturnValue({
+    mockUseOta.mockReturnValue({
       status: "downloading",
       error: null,
       download: jest.fn(),
@@ -57,7 +57,7 @@ describe("UpdateBanner", () => {
 
   it("shows restart button when ready", () => {
     const applyNow = jest.fn();
-    mockUseOtaUpdate.mockReturnValue({
+    mockUseOta.mockReturnValue({
       status: "ready",
       error: null,
       download: jest.fn(),
