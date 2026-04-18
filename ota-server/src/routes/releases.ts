@@ -34,7 +34,7 @@ router.get('/', (req: Request, res: Response) => {
   const params: unknown[] = [];
 
   if (channel) { query += ' AND channel = ?'; params.push(channel); }
-  if (platform) { query += ' AND (platform = ? OR platform = "all")'; params.push(platform); }
+  if (platform) { query += ' AND (platform = ? OR platform = 'all')'; params.push(platform); }
   if (status) { query += ' AND status = ?'; params.push(status); }
 
   query += ' ORDER BY created_at DESC';
@@ -53,7 +53,7 @@ router.get('/current', (req: Request, res: Response) => {
   const params: unknown[] = [channel];
 
   if (platform) {
-    query += ' AND (platform = ? OR platform = "all")';
+    query += ' AND (platform = ? OR platform = 'all')';
     params.push(platform);
   }
   query += ' ORDER BY rollout_percentage DESC, created_at DESC LIMIT 1';
