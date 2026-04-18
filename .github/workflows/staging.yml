@@ -96,7 +96,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event.inputs.platform == 'all' || github.event.inputs.platform == 'web' || github.event_name == 'push'
     outputs:
-      preview_url: ${{ steps.deploy.outputs.preview_url }}
+      preview_url: ${{ steps.deploy.outputs.preview-url }}
     steps:
       - uses: actions/checkout@v4
 
