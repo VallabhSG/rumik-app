@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import Constants from "expo-constants";
 import { useFeatureFlag, useKillSwitch, useExperiment, useDynamicUrl } from "../hooks/useRemoteConfig";
+import { useOta } from "../contexts/OtaContext";
 
 interface Props {
   onNavigate?: (screen: string) => void;
@@ -17,6 +18,7 @@ interface Props {
 export default function HomeScreen({ onNavigate }: Props) {
   // ── Remote config demo ──────────────────────────────────────────────────
   // Toggle "new_releases" in the admin dashboard to show/hide this section.
+  const { status: otaStatus } = useOta();
   const showNewReleases = useFeatureFlag("new_releases", false);
   const showNewOnboarding = useFeatureFlag("new_onboarding", false);
   const taglineVariant = useExperiment("tagline_test", "control");
@@ -31,7 +33,8 @@ export default function HomeScreen({ onNavigate }: Props) {
         <View style={[styles.header, taglineVariant === "bold" && styles.headerBold]}>
           <View style={styles.versionBadge}>
             <Text style={styles.versionBadgeText}>
-              v{Constants.expoConfig?.version ?? "—"} ✦ NEW
+              v{Constants.expoConfig?.version ?? "—"}
+              {(otaStatus === "available" || otaStatus === "ready") ? " ✦ NEW" : ""}
             </Text>
           </View>
           <Text style={[styles.logo, taglineVariant === "bold" && styles.logoBold]}>rumik</Text>
