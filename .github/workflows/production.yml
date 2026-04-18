@@ -178,7 +178,7 @@ jobs:
           fi
           NOTES_JSON=$(echo "$NOTES" | jq -Rs '.')
 
-          curl -X POST "${{ secrets.OTA_SERVER_URL }}/api/releases" \
+          curl --fail -X POST "${{ secrets.OTA_SERVER_URL }}/api/releases" \
             -H "Authorization: Bearer ${{ secrets.OTA_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d "{
