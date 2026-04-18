@@ -4,6 +4,7 @@ import type { OtaConfig, OtaRelease, UpdateStatus } from "./types";
 import { storage } from "./storage";
 import { getInstallId } from "./deviceId";
 import { isInRollout } from "./rollout";
+import { isVersionInRange } from "./semver";
 import { CrashTracker } from "./crashTracker";
 
 type StatusCallback = (status: UpdateStatus) => void;
@@ -98,6 +99,22 @@ export class OtaClient {
 
       const release = await this.fetchCurrentRelease(nativeVersion);
       if (!release) {
+        this.onStatus("up-to-date");
+        return "up-to-date";
+      }
+
+      // Native version constraint — release may target a specific native build range
+      if (
+        !isVersionInRange(
+          nativeVersion,
+          release.min_native_version,
+          release.max_native_version,
+        )
+      ) {
+        console.log(
+          `[OTA] skipping release ${release.version} — native version ${nativeVersion} ` +
+            `outside range [${release.min_native_version ?? "*"}, ${release.max_native_version ?? "*"}]`,
+        );
         this.onStatus("up-to-date");
         return "up-to-date";
       }
