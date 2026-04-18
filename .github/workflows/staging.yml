@@ -48,7 +48,6 @@ jobs:
           curl -L "$BUILD_URL" -o rumik-staging.apk
 
       - name: Upload to Firebase App Distribution
-        continue-on-error: true  # SKIPPED if FIREBASE_SERVICE_ACCOUNT not configured
         uses: wzieba/Firebase-Distribution-Github-Action@v1
         with:
           appId: ${{ secrets.FIREBASE_ANDROID_APP_ID }}
