@@ -170,16 +170,25 @@ jobs:
       - name: Register release with custom OTA server
         continue-on-error: true
         run: |
+          # Extract release notes from annotated git tag (falls back to commit subject)
+          TAG="v${{ needs.version.outputs.version }}"
+          NOTES=$(git tag -l --format='%(contents)' "$TAG" 2>/dev/null | head -20)
+          if [ -z "$NOTES" ]; then
+            NOTES=$(git log -1 --pretty=format:"%s" 2>/dev/null || echo "Release $TAG")
+          fi
+          NOTES_JSON=$(echo "$NOTES" | jq -Rs '.')
+
           curl -X POST "${{ secrets.OTA_SERVER_URL }}/api/releases" \
             -H "Authorization: Bearer ${{ secrets.OTA_API_KEY }}" \
             -H "Content-Type: application/json" \
-            -d '{
-              "version": "${{ needs.version.outputs.version }}",
-              "channel": "production",
-              "rollout_percentage": 5,
-              "is_rollback": ${{ needs.version.outputs.is_rollback }},
-              "commit_sha": "${{ github.sha }}"
-            }'
+            -d "{
+              \"version\": \"${{ needs.version.outputs.version }}\",
+              \"channel\": \"production\",
+              \"rollout_percentage\": 5,
+              \"is_rollback\": ${{ needs.version.outputs.is_rollback }},
+              \"commit_sha\": \"${{ github.sha }}\",
+              \"release_notes\": $NOTES_JSON
+            }"
 
   # ── Android → Play Store ──────────────────────────────────────────────────────
   # SKIPPED: No Google Play Developer account ($25 one-time fee required).
