@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
+import semver from 'semver';
 import db from '../db.js';
 
 const router = Router();
@@ -34,7 +35,7 @@ router.get('/', (req: Request, res: Response) => {
   const params: unknown[] = [];
 
   if (channel) { query += ' AND channel = ?'; params.push(channel); }
-  if (platform) { query += ' AND (platform = ? OR platform = "all")'; params.push(platform); }
+  if (platform) { query += ' AND (platform = ? OR platform = 'all')'; params.push(platform); }
   if (status) { query += ' AND status = ?'; params.push(status); }
 
   query += ' ORDER BY created_at DESC';
@@ -43,8 +44,9 @@ router.get('/', (req: Request, res: Response) => {
 });
 
 // GET /api/releases/current
+// Optional ?native_version=1.2.0 enforces min/max_native_version constraints
 router.get('/current', (req: Request, res: Response) => {
-  const { channel = 'production', platform } = req.query;
+  const { channel = 'production', platform, native_version } = req.query;
 
   let query = `
     SELECT * FROM releases
@@ -53,12 +55,27 @@ router.get('/current', (req: Request, res: Response) => {
   const params: unknown[] = [channel];
 
   if (platform) {
-    query += ' AND (platform = ? OR platform = "all")';
+    query += ' AND (platform = ? OR platform = 'all')';
     params.push(platform);
   }
-  query += ' ORDER BY rollout_percentage DESC, created_at DESC LIMIT 1';
+  query += ' ORDER BY rollout_percentage DESC, created_at DESC';
 
-  const release = db.prepare(query).get(...params);
+  const candidates = db.prepare(query).all(...params) as Record<string, unknown>[];
+
+  // Filter by native version constraints when caller provides their native build version
+  const clientVersion = typeof native_version === 'string' ? semver.valid(semver.coerce(native_version)) : null;
+
+  const release = candidates.find((r) => {
+    if (!clientVersion) return true; // no version supplied — skip constraint check
+
+    const min = r.min_native_version ? semver.valid(semver.coerce(r.min_native_version as string)) : null;
+    const max = r.max_native_version ? semver.valid(semver.coerce(r.max_native_version as string)) : null;
+
+    if (min && semver.lt(clientVersion, min)) return false;
+    if (max && semver.gt(clientVersion, max)) return false;
+    return true;
+  });
+
   if (!release) {
     res.status(404).json({ success: false, error: 'No active release found' });
     return;
