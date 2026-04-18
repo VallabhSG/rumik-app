@@ -58,7 +58,8 @@ export function RemoteConfigProvider({
       })
       .catch(() => clientRef.current.initialize());
 
-    return () => clientRef.current.destroy();
+    const currentClient = clientRef.current;
+    return () => currentClient.destroy();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (

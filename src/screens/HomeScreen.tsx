@@ -96,7 +96,7 @@ export default function HomeScreen({ onNavigate }: Props) {
           <View style={styles.onboardingBanner} testID="new-onboarding">
             <Text style={styles.onboardingTitle}>✨ New Experience</Text>
             <Text style={styles.onboardingText}>
-              We've redesigned your onboarding. Tap to explore the new flow.
+              We&apos;ve redesigned your onboarding. Tap to explore the new flow.
             </Text>
           </View>
         )}
@@ -105,7 +105,7 @@ export default function HomeScreen({ onNavigate }: Props) {
         {checkoutKilled && (
           <View style={styles.killBanner} testID="kill-banner">
             <Text style={styles.killBannerText}>
-              🚫 Checkout is temporarily unavailable. We're working on it.
+              🚫 Checkout is temporarily unavailable. We&apos;re working on it.
             </Text>
           </View>
         )}
