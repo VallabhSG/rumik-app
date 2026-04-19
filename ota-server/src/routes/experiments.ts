@@ -22,6 +22,7 @@ const CreateExperimentSchema = z.object({
   key: z.string().min(1).regex(/^[a-z0-9_]+$/, 'Key must be snake_case'),
   variants: z.array(VariantSchema).min(2, 'At least 2 variants required'),
   targeting: TargetingSchema,
+  status: z.enum(['draft', 'active', 'paused', 'completed']).optional(),
 });
 
 const UpdateExperimentSchema = z.object({
