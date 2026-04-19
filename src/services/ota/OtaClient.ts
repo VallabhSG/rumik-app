@@ -6,6 +6,9 @@ import { getInstallId } from "./deviceId";
 import { isInRollout } from "./rollout";
 import { isVersionInRange } from "./semver";
 import { CrashTracker } from "./crashTracker";
+import { PerfTracker } from "./PerfTracker";
+import { EventReporter } from "./EventReporter";
+import { ErrorReporter } from "./ErrorReporter";
 
 type StatusCallback = (status: UpdateStatus) => void;
 
@@ -32,6 +35,11 @@ export class OtaClient {
   private config: OtaConfig;
   private onStatus: StatusCallback;
   private crashTracker: CrashTracker | null = null;
+  private perfTracker: PerfTracker | null = null;
+  private eventReporter: EventReporter | null = null;
+  private errorReporter: ErrorReporter | null = null;
+  private currentRelease: OtaRelease | null = null;
+  private initTime = Date.now();
 
   constructor(config: OtaConfig, onStatus: StatusCallback) {
     this.config = config;
@@ -67,11 +75,29 @@ export class OtaClient {
     } catch (e) {
       console.warn("[OTA] crashTracker init failed (non-fatal):", e);
     }
+
+    // Initialize monitoring services (best-effort)
+    try {
+      const installId = await getInstallId();
+      this.perfTracker = new PerfTracker(installId, version, this.config);
+      this.perfTracker.start();
+      this.perfTracker.recordStartupTime(Date.now() - this.initTime);
+
+      this.eventReporter = new EventReporter(installId, this.config);
+      this.errorReporter = new ErrorReporter(installId, version, this.config);
+      this.errorReporter.install();
+    } catch (e) {
+      console.warn("[OTA] monitoring init failed (non-fatal):", e);
+    }
+
     console.log("[OTA] initialize done");
   }
 
   destroy(): void {
     this.crashTracker?.destroy();
+    this.perfTracker?.stop();
+    this.errorReporter?.uninstall();
+    this.eventReporter?.flushQueue().catch(() => {});
   }
 
   // ---------------------------------------------------------------------------
@@ -132,6 +158,8 @@ export class OtaClient {
         return "up-to-date";
       }
 
+      this.currentRelease = release;
+      this.eventReporter?.report(release.id, release.version, "eligible");
       this.onStatus("available");
       return "available";
     } catch (err) {
@@ -151,6 +179,10 @@ export class OtaClient {
    */
   async downloadAndStage(): Promise<UpdateStatus> {
     this.onStatus("downloading");
+    const release = this.currentRelease;
+    if (release)
+      this.eventReporter?.report(release.id, release.version, "download_start");
+    const downloadStart = Date.now();
 
     try {
       let expoUpdatesAvailable = false;
@@ -163,6 +195,18 @@ export class OtaClient {
           // In Expo Go expo-updates download is disabled — skip to ready so the
           // full UI flow (available → downloading → ready) can be observed.
           console.warn("[OTA] Expo Go: skipping actual bundle download");
+          if (release) {
+            const ms = Date.now() - downloadStart;
+            this.perfTracker?.recordUpdateDownload(ms);
+            this.eventReporter?.report(
+              release.id,
+              release.version,
+              "download_complete",
+              undefined,
+              { duration_ms: ms },
+            );
+            this.eventReporter?.report(release.id, release.version, "staged");
+          }
           this.onStatus("ready");
           return "ready";
         }
@@ -177,21 +221,39 @@ export class OtaClient {
       // Background download — expo-updates writes to its own cache directory.
       // Bundle signature verification happens inside fetchUpdateAsync.
       await Updates.fetchUpdateAsync();
+      const downloadMs = Date.now() - downloadStart;
+      this.perfTracker?.recordUpdateDownload(downloadMs);
 
       // Bookkeeping for crash-safe rollback
       const prev = await this.resolveCurrentVersion();
       const nativeVersion =
         Application.nativeApplicationVersion ?? this.config.nativeVersion;
-      const release = await this.fetchCurrentRelease(nativeVersion);
-      if (release) {
+      const resolvedRelease = await this.fetchCurrentRelease(nativeVersion);
+      if (resolvedRelease) {
         await storage.setPreviousVersion(prev);
-        await storage.setCurrentVersion(release.version);
+        await storage.setCurrentVersion(resolvedRelease.version);
+        this.eventReporter?.report(
+          resolvedRelease.id,
+          resolvedRelease.version,
+          "download_complete",
+          undefined,
+          { duration_ms: downloadMs },
+        );
+        this.eventReporter?.report(
+          resolvedRelease.id,
+          resolvedRelease.version,
+          "staged",
+        );
       }
 
       this.onStatus("ready");
       return "ready";
     } catch (err) {
       console.error("[OTA] downloadAndStage error:", err);
+      if (release) {
+        const msg = err instanceof Error ? err.message : "download failed";
+        this.eventReporter?.report(release.id, release.version, "failed", msg);
+      }
       this.onStatus("error");
       return "error";
     }

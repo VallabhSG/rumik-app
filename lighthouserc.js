@@ -25,6 +25,8 @@ module.exports = {
         'render-blocking-resources':  'off',
         'unused-javascript':          'off',
         'uses-long-cache-ttl':        'off',
+        'valid-source-maps':          'off',  // Expo prod bundles omit source maps by design
+        'max-potential-fid':          'off',  // Deprecated metric; replaced by INP
         // Dark-theme app — contrast ratios intentional; address in design pass
         'color-contrast':             'off',
         // SPA demo without traditional SEO meta tags

@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Low-Level Design — Rumik App OTA + CI/CD System</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #f8f9fa;
+    color: #1a1a2e;
+    padding: 40px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  .cover {
+    text-align: center;
+    padding: 60px 0 40px;
+    border-bottom: 3px solid #3ecf8e;
+    margin-bottom: 48px;
+  }
+  .cover h1 { font-size: 2.4rem; color: #1a1a2e; margin-bottom: 8px; }
+  .cover h2 { font-size: 1.3rem; font-weight: 400; color: #3ecf8e; margin-bottom: 24px; }
+  .cover .meta { font-size: 0.9rem; color: #666; line-height: 1.8; }
+  .badge {
+    display: inline-block;
+    background: #3ecf8e;
+    color: #fff;
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin: 0 4px;
+  }
+
+  section { margin-bottom: 48px; }
+  h2.section-title {
+    font-size: 1.4rem;
+    color: #3ecf8e;
+    border-left: 4px solid #3ecf8e;
+    padding-left: 12px;
+    margin-bottom: 16px;
+  }
+  h3 { font-size: 1.05rem; color: #1a1a2e; margin: 20px 0 10px; }
+  p { color: #444; line-height: 1.7; margin-bottom: 12px; font-size: 0.95rem; }
+
+  .diagram-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 28px 24px;
+    margin: 20px 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    overflow-x: auto;
+  }
+  .diagram-card .caption {
+    text-align: center;
+    font-size: 0.82rem;
+    color: #888;
+    margin-top: 12px;
+    font-style: italic;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+    margin: 16px 0;
+  }
+  th {
+    background: #3ecf8e;
+    color: #fff;
+    padding: 10px 14px;
+    text-align: left;
+    font-weight: 600;
+  }
+  td {
+    padding: 9px 14px;
+    border-bottom: 1px solid #e2e8f0;
+    color: #444;
+    vertical-align: top;
+  }
+  tr:nth-child(even) td { background: #f8f9fa; }
+
+  code {
+    background: #f1f5f9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 0.85em;
+    color: #0f172a;
+  }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin: 16px 0;
+  }
+  .info-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 16px 18px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  }
+  .info-card h4 { font-size: 0.88rem; color: #3ecf8e; margin-bottom: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+  .info-card p { font-size: 0.88rem; margin-bottom: 6px; }
+
+  @media print {
+    body { background: #fff; padding: 20px; }
+    .diagram-card { box-shadow: none; break-inside: avoid; }
+    section { break-inside: avoid; }
+    .two-col { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>Low-Level Design</h1>
+  <h2>Rumik App — OTA Update System &amp; CI/CD Pipeline</h2>
+  <div class="meta">
+    <span class="badge">API Design</span>
+    <span class="badge">Database Schema</span>
+    <span class="badge">Service Internals</span>
+    <span class="badge">Sequence Flows</span>
+    <br/><br/>
+    Author: VallabhSG &nbsp;|&nbsp; Branch: fix/ota-asyncstorage-resilience &nbsp;|&nbsp; 2026
+  </div>
+</div>
+
+<!-- ── 1. Client Architecture ── -->
+<section>
+  <h2 class="section-title">1. Client-Side Architecture</h2>
+  <p>
+    The React Native client is organised in four layers. The <strong>UI layer</strong> renders components.
+    The <strong>hook layer</strong> bridges context and components. The <strong>context layer</strong> holds
+    shared state. The <strong>service layer</strong> contains all business logic and has no React dependencies.
+  </p>
+  <div class="diagram-card">
+    <div class="mermaid">
+classDiagram
+    class OtaClient {
+      -config: OtaConfig
+      -perfTracker: PerfTracker
+      -eventReporter: EventReporter
+      -errorReporter: ErrorReporter
+      -crashTracker: CrashTracker
+      +initialize() Promise~void~
+      +checkForUpdate() Promise~UpdateInfo~
+      +downloadAndStage() Promise~void~
+      +applyUpdate() void
+      +destroy() Promise~void~
+    }
+
+    class PerfTracker {
+      -queue: MetricEntry[]
+      -lastFlush: number
+      +recordStartupTime(ms) void
+      +recordUpdateDownload(ms) void
+      +recordFrameRate(fps) void
+      +recordMemory(mb) void
+      +flush() Promise~void~
+      +start() void
+      +stop() void
+    }
+
+    class EventReporter {
+      -queue: PendingEvent[]
+      +report(releaseId, version, eventType) void
+      +flushQueue() Promise~void~
+    }
+
+    class ErrorReporter {
+      -installed: boolean
+      -previousHandler: Handler
+      +install() void
+      +uninstall() void
+      +report(error, isFatal) Promise~void~
+    }
+
+    class CrashTracker {
+      -crashCount: number
+      -launchCount: number
+      +recordCrash() void
+      +getCrashRate() number
+      +shouldRollback() boolean
+    }
+
+    class ConfigClient {
+      -cache: ConfigSnapshot
+      +fetchConfig(device) Promise~ConfigSnapshot~
+      +resolve(key, deviceCtx) any
+    }
+
+    OtaClient --> PerfTracker
+    OtaClient --> EventReporter
+    OtaClient --> ErrorReporter
+    OtaClient --> CrashTracker
+    </div>
+    <div class="caption">Figure 1 — Client service layer class diagram</div>
+  </div>
+
+  <h3>Key Algorithms</h3>
+  <div class="two-col">
+    <div class="info-card">
+      <h4>Rollout Bucketing (rollout.ts)</h4>
+      <p>Uses DJB2 hash of <code>installId</code> mapped to 0–99. Device is eligible if <code>hash % 100 &lt; rollout_percentage</code>. Deterministic — same device always gets same result.</p>
+    </div>
+    <div class="info-card">
+      <h4>Semver Enforcement (semver.ts)</h4>
+      <p>Compares native app version against release's <code>min_native_version</code> / <code>max_native_version</code>. Uses integer-tuple comparison (major · minor · patch).</p>
+    </div>
+    <div class="info-card">
+      <h4>PerfTracker Flush Guard</h4>
+      <p>Enforces <code>MIN_FLUSH_INTERVAL = 10s</code> between flushes. On failed flush, restores queue so no metrics are lost. Auto-flushes on <code>stop()</code>.</p>
+    </div>
+    <div class="info-card">
+      <h4>ErrorReporter Stack Parsing</h4>
+      <p>Regex parses <code>at funcName (file:line:col)</code> format. Filters <code>node_modules</code> frames. Takes top 20 frames. Gracefully handles missing <code>error.stack</code>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── 2. Server API ── -->
+<section>
+  <h2 class="section-title">2. Server API Design</h2>
+  <p>All endpoints follow a consistent response envelope: <code>{ success, data, error?, meta? }</code>. Authentication uses Bearer token via <code>Authorization</code> header. Two server instances are deployed — <strong>Staging</strong> and <strong>Production</strong> — each with an independent SQLite database. Release and crash-rate records are scoped by the <code>channel</code> field (<code>staging</code> | <code>production</code>).</p>
+
+  <table>
+    <thead>
+      <tr><th>Route Module</th><th>Endpoints</th><th>Key Behaviour</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>flags.ts</code></td>
+        <td>GET · POST · PATCH · DELETE <code>/api/flags</code></td>
+        <td>Targeting rules stored as JSON. Audit logged. WebSocket broadcast on change.</td>
+      </tr>
+      <tr>
+        <td><code>experiments.ts</code></td>
+        <td>GET · POST · PATCH · DELETE <code>/api/experiments</code></td>
+        <td>Variant assignment via weighted DJB2 hash on <code>install_id</code>. Sticky (re-assign returns same variant).</td>
+      </tr>
+      <tr>
+        <td><code>config.ts</code></td>
+        <td>GET <code>/api/config</code></td>
+        <td>Aggregates flags + experiments + urls + kill switches. Applies targeting rules per device context.</td>
+      </tr>
+      <tr>
+        <td><code>releases.ts</code></td>
+        <td>GET · POST · PATCH · DELETE <code>/api/releases</code><br/>GET <code>/api/releases/current</code></td>
+        <td>Soft delete (status → rolled_back). <code>/current</code> returns highest-rollout active release.</td>
+      </tr>
+      <tr>
+        <td><code>rollbacks.ts</code></td>
+        <td>GET · POST <code>/api/rollbacks</code></td>
+        <td>Guards against <code>exposdk:*</code> dev-runtime false triggers. Atomically swaps active release.</td>
+      </tr>
+      <tr>
+        <td><code>perfMetrics.ts</code></td>
+        <td>POST <code>/api/perf-metrics</code><br/>GET <code>/timeseries</code> · <code>/summary</code></td>
+        <td>Batch ingest (up to 100). P50/P95/P99 via two-query COUNT+OFFSET (SQLite has no PERCENTILE_CONT).</td>
+      </tr>
+      <tr>
+        <td><code>updateEvents.ts</code></td>
+        <td>POST <code>/api/update-events</code><br/>GET <code>/funnel</code> · <code>/timeseries</code></td>
+        <td>Funnel: COUNT(DISTINCT device_id) per event_type. Computes adoption_rate and failure_rate.</td>
+      </tr>
+      <tr>
+        <td><code>alerts.ts</code></td>
+        <td>CRUD <code>/api/alerts/rules</code><br/>GET <code>/api/alerts/history</code></td>
+        <td>5 metric types. Cooldown enforced via alert_history query before re-firing.</td>
+      </tr>
+      <tr>
+        <td><code>errors.ts</code></td>
+        <td>POST <code>/api/errors</code><br/>GET <code>/groups</code> · <code>/groups/:id</code> · <code>/timeseries</code><br/>PATCH <code>/groups/:id</code></td>
+        <td>SHA-256 fingerprint of (errorType :: file :: func) for top 3 frames → 16-char hex. Deduplication on INSERT.</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ── 3. Database Schema ── -->
+<section>
+  <h2 class="section-title">3. Database Schema</h2>
+  <p>SQLite database with 14 tables, 8 indexes for query performance. All IDs are UUID v4. Timestamps are ISO 8601 strings.</p>
+  <div class="diagram-card">
+    <div class="mermaid">
+erDiagram
+    feature_flags {
+        TEXT id PK
+        TEXT key UK
+        INTEGER enabled
+        TEXT description
+        TEXT targeting
+        TEXT created_at
+        TEXT updated_at
+    }
+    experiments {
+        TEXT id PK
+        TEXT key UK
+        TEXT status
+        TEXT variants
+        TEXT targeting
+        TEXT created_at
+        TEXT updated_at
+    }
+    experiment_assignments {
+        TEXT install_id PK
+        TEXT experiment_id PK
+        TEXT variant_id
+        TEXT assigned_at
+    }
+    dynamic_urls {
+        TEXT id PK
+        TEXT key UK
+        TEXT value
+        TEXT targeting
+        TEXT created_at
+        TEXT updated_at
+    }
+    kill_switches {
+        TEXT id PK
+        TEXT key UK
+        INTEGER active
+        TEXT reason
+        TEXT created_at
+        TEXT updated_at
+    }
+    releases {
+        TEXT id PK
+        TEXT version
+        TEXT channel
+        TEXT platform
+        REAL rollout_percentage
+        INTEGER is_rollback
+        TEXT status
+        TEXT commit_sha
+        TEXT min_native_version
+        TEXT max_native_version
+        TEXT created_at
+        TEXT updated_at
+    }
+    rollbacks {
+        TEXT id PK
+        TEXT target_version
+        TEXT from_version
+        TEXT reason
+        TEXT channels
+        TEXT triggered_by
+        TEXT status
+        TEXT created_at
+    }
+    crash_rates {
+        TEXT id PK
+        REAL crash_rate
+        TEXT version
+        TEXT channel
+        TEXT recorded_at
+    }
+    perf_metrics {
+        TEXT id PK
+        TEXT device_id
+        TEXT version
+        TEXT channel
+        TEXT platform
+        TEXT metric_type
+        REAL value
+        TEXT session_id
+        TEXT recorded_at
+    }
+    update_events {
+        TEXT id PK
+        TEXT device_id
+        TEXT release_id
+        TEXT version
+        TEXT channel
+        TEXT platform
+        TEXT event_type
+        TEXT error_msg
+        TEXT metadata
+        TEXT recorded_at
+    }
+    alert_rules {
+        TEXT id PK
+        TEXT name
+        TEXT metric
+        TEXT operator
+        REAL threshold
+        TEXT channel
+        TEXT version
+        INTEGER window_mins
+        INTEGER cooldown_mins
+        INTEGER enabled
+        TEXT webhook_url
+        TEXT created_at
+        TEXT updated_at
+    }
+    alert_history {
+        TEXT id PK
+        TEXT rule_id FK
+        REAL metric_value
+        TEXT fired_at
+        TEXT payload
+        TEXT status
+    }
+    error_groups {
+        TEXT id PK
+        TEXT fingerprint UK
+        TEXT title
+        TEXT error_type
+        TEXT first_seen
+        TEXT last_seen
+        INTEGER event_count
+        INTEGER device_count
+        TEXT version
+        TEXT channel
+        TEXT status
+        TEXT updated_at
+    }
+    error_events {
+        TEXT id PK
+        TEXT group_id FK
+        TEXT device_id
+        TEXT version
+        TEXT platform
+        TEXT error_type
+        TEXT message
+        TEXT stack_trace
+        TEXT context
+        TEXT recorded_at
+    }
+    audit_log {
+        TEXT id PK
+        TEXT entity_type
+        TEXT entity_id
+        TEXT action
+        TEXT changes
+        TEXT actor
+        TEXT created_at
+    }
+
+    alert_history }o--|| alert_rules : "rule_id"
+    error_events }o--|| error_groups : "group_id"
+    experiment_assignments }o--|| experiments : "experiment_id"
+    </div>
+    <div class="caption">Figure 2 — Full database entity-relationship diagram (14 tables)</div>
+  </div>
+</section>
+
+<!-- ── 4. Alert Engine ── -->
+<section>
+  <h2 class="section-title">4. Alert Engine — Internal Flow</h2>
+  <p>Runs every 5 minutes via <code>setInterval</code> in the Express server. Evaluates all enabled rules and fires Slack-compatible webhooks when thresholds are breached and the cooldown window has passed.</p>
+  <div class="diagram-card">
+    <div class="mermaid">
+flowchart TD
+    Start([Timer tick\nevery 5 min]) --> FetchRules[Fetch enabled\nalert_rules]
+    FetchRules --> Loop{For each rule}
+    Loop --> Compute[Compute metric\nfrom DB]
+    Compute --> CheckOp{Threshold\nbreached?}
+    CheckOp -->|No| Loop
+    CheckOp -->|Yes| Cooldown{In cooldown\nwindow?}
+    Cooldown -->|Yes — skip| Loop
+    Cooldown -->|No| Fire[POST webhook\nSlack payload]
+    Fire --> Record[INSERT alert_history\nstatus: sent / failed]
+    Record --> Loop
+    Loop -->|done| End([Wait next tick])
+
+    subgraph Metrics["Metric Computors"]
+      M1["crash_rate\nAVG from crash_rates\nwithin window_mins"]
+      M2["adoption_rate\napplied / eligible\nfrom update_events"]
+      M3["failure_rate\nfailed / download_start\nfrom update_events"]
+      M4["p95_startup_ms\ntwo-query COUNT+OFFSET\nfrom perf_metrics"]
+      M5["p95_download_ms\ntwo-query COUNT+OFFSET\nfrom perf_metrics"]
+    end
+
+    Compute -.-> Metrics
+    </div>
+    <div class="caption">Figure 3 — Alert engine execution flow and metric computation strategies</div>
+  </div>
+</section>
+
+<!-- ── 5. Error Grouping ── -->
+<section>
+  <h2 class="section-title">5. Error Tracking — Deduplication Algorithm</h2>
+  <div class="diagram-card">
+    <div class="mermaid">
+flowchart TD
+    Ingest["POST /api/errors\n{ device_id, error_type, message, stack_trace }"]
+    Parse["Extract top 3 stack frames\n(file :: func)"]
+    Hash["SHA-256(\n  errorType :: frame1 | frame2 | frame3\n).slice(0,16)\n→ fingerprint"]
+    Lookup{"error_groups WHERE\nfingerprint = ?"}
+    NewGroup["INSERT error_groups\n{ fingerprint, title, first_seen,\n  event_count=1, device_count=1 }"]
+    ExistGroup["UPDATE error_groups\n event_count += 1\n device_count += ? (new device?)\n last_seen = now"]
+    InsertEvent["INSERT error_events\n{ group_id, device_id, stack_trace,\n  context, recorded_at }"]
+    Return["Return { group_id, is_new }"]
+
+    Ingest --> Parse --> Hash --> Lookup
+    Lookup -->|Not found| NewGroup --> InsertEvent --> Return
+    Lookup -->|Found| ExistGroup --> InsertEvent --> Return
+    </div>
+    <div class="caption">Figure 4 — Error deduplication via SHA-256 stack fingerprint</div>
+  </div>
+</section>
+
+<!-- ── 6. Remote Config ── -->
+<section>
+  <h2 class="section-title">6. Remote Config Resolution</h2>
+  <p>The <code>GET /api/config</code> endpoint resolves all config types for a specific device context in a single request, applying targeting rules to each entry. Staging builds point to the staging server; production builds point to the production server — controlled by the <code>OTA_SERVER_URL</code> environment variable baked in at EAS build time.</p>
+  <div class="diagram-card">
+    <div class="mermaid">
+sequenceDiagram
+    participant StagingApp as Mobile App\n(Staging Build)
+    participant ProdApp as Mobile App\n(Production Build)
+    participant StagingAPI as Staging Server\nGET /api/config
+    participant ProdAPI as Production Server\nGET /api/config
+    participant DB as SQLite (per env)
+    participant WS as WebSocket (per env)
+
+    Note over StagingApp,StagingAPI: Staging environment (Firebase / TestFlight Internal)
+    StagingApp->>StagingAPI: GET /api/config?install_id=abc&platform=ios&version=1.2.0
+    StagingAPI->>DB: SELECT * FROM feature_flags WHERE enabled=1
+    StagingAPI->>DB: SELECT * FROM experiments WHERE status='active'
+    StagingAPI->>DB: SELECT * FROM kill_switches WHERE active=1
+    StagingAPI->>DB: SELECT * FROM experiment_assignments WHERE install_id=abc
+    StagingAPI->>StagingAPI: Apply targeting rules\n(platform, version, percentage)
+    StagingAPI-->>StagingApp: { flags, experiments, urls, kill_switches }
+
+    Note over ProdApp,ProdAPI: Production environment (App Store / Google Play)
+    ProdApp->>ProdAPI: GET /api/config?install_id=xyz&platform=android&version=1.2.0
+    ProdAPI->>DB: SELECT ... (production DB)
+    ProdAPI->>ProdAPI: Apply targeting rules
+    ProdAPI-->>ProdApp: { flags, experiments, urls, kill_switches }
+
+    Note over StagingApp,WS: WebSocket for live updates (both envs)
+    WS-->>StagingApp: { type: kill_switch, key: X, active: true }
+    StagingApp->>StagingApp: Immediately disable feature X
+    </div>
+    <div class="caption">Figure 5 — Remote config resolution across staging and production environments</div>
+  </div>
+</section>
+
+<!-- ── 6b. Staging vs Production Deployment ── -->
+<section>
+  <h2 class="section-title">6b. Staging vs Production Deployment</h2>
+  <p>All code is promoted through a staging gate before reaching production. The same OTA server binary is deployed twice with different environment variables.</p>
+  <div class="diagram-card">
+    <div class="mermaid">
+flowchart TD
+    PR["Pull Request\nopened / updated"] --> Validate["pr-validation workflow\n• Prettier · TypeScript · Jest\n• Bundle size · Lighthouse CI\n• Playwright E2E"]
+    Validate -->|pass| Merge["Merge → master"]
+
+    Merge --> StageBuild["staging workflow\n• EAS Android → Firebase App Distribution\n• EAS iOS → TestFlight Internal\n• Web → Vercel Preview URL"]
+    Merge --> ServerStage["Deploy OTA Server → Staging\nOTA_SERVER_URL=staging.ota.example.com\nchannel=staging"]
+
+    StageBuild --> QA["QA / Internal Testing\non staging environment"]
+    ServerStage --> QA
+
+    QA -->|approve| Tag["git tag vX.Y.Z\n→ release-tag workflow"]
+    Tag --> ProdBuild["production workflow\n• EAS Android → Google Play (Internal)\n• EAS iOS → App Store Connect\n• Web → Vercel Production"]
+    Tag --> ServerProd["Deploy OTA Server → Production\nOTA_SERVER_URL=ota.example.com\nchannel=production"]
+
+    ProdBuild --> Monitor["Rollback Monitor\nwatch crash_rate > 5%\n→ auto-rollback workflow"]
+    ServerProd --> Monitor
+    </div>
+    <div class="caption">Figure 5b — Staging gate: every change passes staging before reaching production</div>
+  </div>
+</section>
+
+<!-- ── 7. Crash & Rollback ── -->
+<section>
+  <h2 class="section-title">7. Crash Detection &amp; Auto-Rollback</h2>
+  <div class="diagram-card">
+    <div class="mermaid">
+sequenceDiagram
+    participant RN as React Native
+    participant EU as ErrorUtils
+    participant ER as ErrorReporter
+    participant CT as CrashTracker
+    participant Store as AsyncStorage
+    participant API as OTA Control Plane
+
+    Note over RN: App Launch
+    CT->>Store: Read { launchCount, crashCount }
+    CT->>Store: Write { launchCount+1 }
+    ER->>EU: getGlobalHandler() → save prev
+    ER->>EU: setGlobalHandler(ourHandler)
+
+    Note over RN: JS Error occurs
+    EU->>ER: handler(error, isFatal=true)
+    ER->>API: POST /api/errors { fingerprint, stack_trace }
+    ER->>EU: call prev handler (chain)
+
+    CT->>CT: recordCrash()
+    CT->>Store: Write { crashCount+1 }
+    CT->>CT: crashRate = crashCount / launchCount
+
+    alt crashRate > threshold AND launches >= minLaunches
+        CT->>API: POST /api/rollbacks { reason, target_version }
+        CT->>API: POST /api/crash-rate { crash_rate }
+        API->>API: UPDATE releases SET status=rolled_back
+        API->>API: Reactivate previous version
+        CT->>RN: reloadAsync() → load previous bundle
+    end
+    </div>
+    <div class="caption">Figure 6 — Full crash detection and auto-rollback sequence</div>
+  </div>
+</section>
+
+<!-- ── 8. Test Strategy ── -->
+<section>
+  <h2 class="section-title">8. Test Coverage Strategy</h2>
+  <table>
+    <thead>
+      <tr><th>Layer</th><th>Test Type</th><th>Framework</th><th>Coverage Target</th><th>Files</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>OTA client services</td><td>Unit</td><td>Jest + ts-jest</td><td>≥ 80%</td><td>PerfTracker, EventReporter, ErrorReporter, crashTracker, rollout, semver, storage, deviceId</td></tr>
+      <tr><td>React hooks</td><td>Unit</td><td>Jest + RNTL</td><td>≥ 80%</td><td>useOtaUpdate, useRemoteConfig</td></tr>
+      <tr><td>React components</td><td>Unit</td><td>RNTL</td><td>≥ 80%</td><td>App, HomeScreen, UpdateBanner</td></tr>
+      <tr><td>Config client</td><td>Unit + Integration</td><td>Jest + mock fetch</td><td>≥ 80%</td><td>ConfigClient, storage, wsClient</td></tr>
+      <tr><td>OTA server routes</td><td>Integration</td><td>Jest + Supertest</td><td>≥ 80%</td><td>All 13 route modules (in-memory SQLite)</td></tr>
+      <tr><td>OTA server services</td><td>Unit</td><td>Jest</td><td>≥ 80%</td><td>errorGrouper, audit, targeting, semver, hash</td></tr>
+      <tr><td>E2E</td><td>End-to-end</td><td>Playwright</td><td>Critical paths</td><td>home.spec.ts</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Test Isolation Pattern (OTA Server)</h3>
+  <p>
+    Each route test file creates a fresh in-memory SQLite DB via <code>createTestDb()</code> and mocks the
+    <code>db.js</code> module before any route imports. This ensures full isolation — no shared state
+    between test files even when running in parallel.
+  </p>
+  <div class="diagram-card">
+    <div class="mermaid">
+flowchart LR
+    TestFile["test file\nroutes/flags.test.ts"]
+    TestDB["createTestDb()\nin-memory SQLite\nwith all 14 tables"]
+    Mock["jest.mock('../../db.js', () => testDb)"]
+    Route["flagsRouter\n(imports db from mock)"]
+    Supertest["supertest(app)\nHTTP assertions"]
+
+    TestFile --> TestDB
+    TestDB --> Mock
+    Mock --> Route
+    Route --> Supertest
+    </div>
+    <div class="caption">Figure 7 — Test isolation pattern: per-file in-memory DB, module mock before import</div>
+  </div>
+</section>
+
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: 'default', securityLevel: 'loose' });
+</script>
+</body>
+</html>
