@@ -30,6 +30,12 @@ router.post('/', (req: Request, res: Response) => {
   const now = new Date().toISOString();
   const id = uuid();
 
+  // Guard: ignore rollbacks triggered by Expo Go / SDK dev runtime versions.
+  // exposdk:* is never a real production release — Expo Go hot-reloads create
+  // false crashes because the JS process restarts without a graceful background
+  // transition, so the session-open watchdog fires on every reload.
+  const isDevRuntime = reason.includes('exposdk:') || target_version === 'unknown';
+
   // Find what version is currently active (to record from_version)
   const channelList = channels.split(',').map(c => c.trim());
   const from_release = db.prepare(`
@@ -38,24 +44,26 @@ router.post('/', (req: Request, res: Response) => {
     ORDER BY created_at DESC LIMIT 1
   `).get(channelList[0] ?? 'production') as { version: string } | undefined;
 
-  // Deactivate current active releases across all specified channels
-  const deactivate = db.prepare(`
-    UPDATE releases SET status = 'rolled_back', updated_at = ?
-    WHERE channel = ? AND status = 'active'
-  `);
+  if (!isDevRuntime) {
+    // Deactivate current active releases across all specified channels
+    const deactivate = db.prepare(`
+      UPDATE releases SET status = 'rolled_back', updated_at = ?
+      WHERE channel = ? AND status = 'active'
+    `);
 
-  // Reactivate the target version across all channels
-  const reactivate = db.prepare(`
-    UPDATE releases SET status = 'active', updated_at = ?
-    WHERE version = ? AND channel = ?
-  `);
+    // Reactivate the target version across all channels
+    const reactivate = db.prepare(`
+      UPDATE releases SET status = 'active', updated_at = ?
+      WHERE version = ? AND channel = ?
+    `);
 
-  db.transaction(() => {
-    for (const channel of channelList) {
-      deactivate.run(now, channel);
-      reactivate.run(now, target_version, channel);
-    }
-  })();
+    db.transaction(() => {
+      for (const channel of channelList) {
+        deactivate.run(now, channel);
+        reactivate.run(now, target_version, channel);
+      }
+    })();
+  }
 
   db.prepare(`
     INSERT INTO rollbacks (id, target_version, from_version, reason, channels, triggered_by, status, created_at)

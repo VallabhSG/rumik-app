@@ -43,7 +43,7 @@ jobs:
   # ── EAS builds (pushes to master/develop only — skips PRs) ───────────────────
   build-native:
     name: Build (${{ matrix.platform }})
-    if: github.event_name == 'push'
+    if: false  # SKIPPED: EAS free tier build quota exhausted — re-enable when quota resets or plan upgrades
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
