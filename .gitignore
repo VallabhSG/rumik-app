@@ -49,3 +49,27 @@ dist-ci/
 
 # google service account (never commit)
 google-service-account.json
+
+# AI / editor tool settings (personal, not project config)
+.claude/
+.cursor/
+.cursorrules
+.windsurfrules
+.opencode.json
+.mcp.json
+AGENTS.md
+GEMINI.md
+CLAUDE.md
+
+# Vercel local project linking
+.vercel/
+
+# Internal planning docs
+PLAN_PART_D.md
+claude.md.txt
+
+# Local env files (keep .env.example out too — use docs/runbook.md for setup)
+.env
+.env.*
+ota-server/.env
+ota-server/.env.*
