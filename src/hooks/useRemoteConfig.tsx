@@ -60,7 +60,7 @@ export function RemoteConfigProvider({
 
     const currentClient = clientRef.current;
     return () => currentClient.destroy();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <ConfigClientContext.Provider value={client}>

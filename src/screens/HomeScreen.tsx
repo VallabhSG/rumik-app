@@ -96,7 +96,8 @@ export default function HomeScreen({ onNavigate }: Props) {
           <View style={styles.onboardingBanner} testID="new-onboarding">
             <Text style={styles.onboardingTitle}>✨ New Experience</Text>
             <Text style={styles.onboardingText}>
-              We&apos;ve redesigned your onboarding. Tap to explore the new flow.
+              We&apos;ve redesigned your onboarding. Tap to explore the new
+              flow.
             </Text>
           </View>
         )}
