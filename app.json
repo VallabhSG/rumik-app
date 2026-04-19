@@ -2,7 +2,7 @@
   "expo": {
     "name": "rumik-app",
     "slug": "rumik-app",
-    "version": "1.0.0",
+    "version": "0.3.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -42,6 +42,9 @@
         "projectId": "dea806b2-5e82-4c80-b836-56dbe62a4c63"
       }
     },
-    "owner": "crazydevvv"
+    "owner": "crazydevvv",
+    "plugins": [
+      "expo-build-properties"
+    ]
   }
 }

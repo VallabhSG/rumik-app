@@ -66,12 +66,16 @@ jobs:
           echo "tag=v${NEXT}" >> $GITHUB_OUTPUT
           echo "version=${NEXT}" >> $GITHUB_OUTPUT
 
-      - name: Push tag
+      - name: Push annotated tag
         if: steps.semver.outputs.skip == 'false'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "${{ steps.semver.outputs.tag }}"
+          # Annotated tag so production.yml can read release notes via git tag --format='%(contents)'
+          COMMITS=$(git log "$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")..HEAD" \
+            --pretty=format:"- %s" --no-merges | \
+            grep -E "^- (feat|fix|perf|refactor):" || echo "- Internal improvements")
+          git tag -a "${{ steps.semver.outputs.tag }}" -m "$(printf '%s\n\n%s' '${{ steps.semver.outputs.tag }}' "$COMMITS")"
           git push origin "${{ steps.semver.outputs.tag }}"
 
       - name: Dispatch production release

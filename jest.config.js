@@ -7,6 +7,7 @@ module.exports = {
     '^@ungap/structured-clone$': '<rootDir>/__mocks__/structured-clone.js',
     '^expo-updates$': '<rootDir>/__mocks__/expo-updates.js',
     '^expo-application$': '<rootDir>/__mocks__/expo-application.js',
+    '^expo-constants$': '<rootDir>/__mocks__/expo-constants.js',
   },
   transformIgnorePatterns: [
     'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg)',
@@ -26,5 +27,5 @@ module.exports = {
     },
   },
   coverageReporters: ['text', 'lcov', 'html'],
-  testPathIgnorePatterns: ['/node_modules/', '/e2e/'],
+  testPathIgnorePatterns: ['/node_modules/', '/e2e/', '/ota-server/'],
 };

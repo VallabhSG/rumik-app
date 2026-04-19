@@ -4,6 +4,7 @@ import type { OtaConfig, OtaRelease, UpdateStatus } from "./types";
 import { storage } from "./storage";
 import { getInstallId } from "./deviceId";
 import { isInRollout } from "./rollout";
+import { isVersionInRange } from "./semver";
 import { CrashTracker } from "./crashTracker";
 
 type StatusCallback = (status: UpdateStatus) => void;
@@ -47,7 +48,9 @@ export class OtaClient {
    * If crash rate exceeds the threshold, triggers an auto-rollback.
    */
   async initialize(): Promise<void> {
+    console.log("[OTA] initialize start");
     const version = await this.resolveCurrentVersion();
+    console.log("[OTA] resolved version:", version);
 
     this.crashTracker = new CrashTracker(
       version,
@@ -56,8 +59,15 @@ export class OtaClient {
       this.config.minLaunchesBeforeRollback,
     );
 
-    await this.crashTracker.initialize(); // detects previous crash, fires callback if needed
-    await this.crashTracker.recordLaunch();
+    try {
+      await this.crashTracker.initialize();
+      console.log("[OTA] crashTracker initialized");
+      await this.crashTracker.recordLaunch();
+      console.log("[OTA] launch recorded");
+    } catch (e) {
+      console.warn("[OTA] crashTracker init failed (non-fatal):", e);
+    }
+    console.log("[OTA] initialize done");
   }
 
   destroy(): void {
@@ -89,6 +99,22 @@ export class OtaClient {
 
       const release = await this.fetchCurrentRelease(nativeVersion);
       if (!release) {
+        this.onStatus("up-to-date");
+        return "up-to-date";
+      }
+
+      // Native version constraint — release may target a specific native build range
+      if (
+        !isVersionInRange(
+          nativeVersion,
+          release.min_native_version,
+          release.max_native_version,
+        )
+      ) {
+        console.log(
+          `[OTA] skipping release ${release.version} — native version ${nativeVersion} ` +
+            `outside range [${release.min_native_version ?? "*"}, ${release.max_native_version ?? "*"}]`,
+        );
         this.onStatus("up-to-date");
         return "up-to-date";
       }
@@ -127,8 +153,23 @@ export class OtaClient {
     this.onStatus("downloading");
 
     try {
-      const check = await Updates.checkForUpdateAsync();
-      if (!check.isAvailable) {
+      let expoUpdatesAvailable = false;
+      try {
+        const check = await Updates.checkForUpdateAsync();
+        expoUpdatesAvailable = check.isAvailable;
+      } catch (expoErr) {
+        const msg = expoErr instanceof Error ? expoErr.message : "";
+        if (msg.includes("not accessible in Expo Go")) {
+          // In Expo Go expo-updates download is disabled — skip to ready so the
+          // full UI flow (available → downloading → ready) can be observed.
+          console.warn("[OTA] Expo Go: skipping actual bundle download");
+          this.onStatus("ready");
+          return "ready";
+        }
+        throw expoErr;
+      }
+
+      if (!expoUpdatesAvailable) {
         this.onStatus("up-to-date");
         return "up-to-date";
       }
@@ -255,9 +296,12 @@ export class OtaClient {
   }
 
   private async resolveCurrentVersion(): Promise<string> {
-    // Prefer what we explicitly tracked; fall back to expo-updates runtime version
-    const stored = await storage.getCurrentVersion();
-    if (stored) return stored;
+    try {
+      const stored = await storage.getCurrentVersion();
+      if (stored) return stored;
+    } catch {
+      // AsyncStorage unavailable — fall through to runtime version
+    }
     return (
       Updates.runtimeVersion ?? Application.nativeApplicationVersion ?? "0.0.0"
     );

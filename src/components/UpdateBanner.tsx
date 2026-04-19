@@ -6,7 +6,7 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from "react-native";
-import { useOtaUpdate } from "../hooks/useOtaUpdate";
+import { useOta } from "../contexts/OtaContext";
 
 /**
  * Minimal non-intrusive banner that surfaces OTA update state.
@@ -15,7 +15,7 @@ import { useOtaUpdate } from "../hooks/useOtaUpdate";
  * Replace this with your own design — the hook is the important part.
  */
 export function UpdateBanner() {
-  const { status, download, applyNow } = useOtaUpdate();
+  const { status, download, applyNow } = useOta();
 
   if (status === "available") {
     return (

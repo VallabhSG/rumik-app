@@ -170,16 +170,25 @@ jobs:
       - name: Register release with custom OTA server
         continue-on-error: true
         run: |
-          curl -X POST "${{ secrets.OTA_SERVER_URL }}/api/releases" \
+          # Extract release notes from annotated git tag (falls back to commit subject)
+          TAG="v${{ needs.version.outputs.version }}"
+          NOTES=$(git tag -l --format='%(contents)' "$TAG" 2>/dev/null | head -20)
+          if [ -z "$NOTES" ]; then
+            NOTES=$(git log -1 --pretty=format:"%s" 2>/dev/null || echo "Release $TAG")
+          fi
+          NOTES_JSON=$(echo "$NOTES" | jq -Rs '.')
+
+          curl --fail -X POST "${{ secrets.OTA_SERVER_URL }}/api/releases" \
             -H "Authorization: Bearer ${{ secrets.OTA_API_KEY }}" \
             -H "Content-Type: application/json" \
-            -d '{
-              "version": "${{ needs.version.outputs.version }}",
-              "channel": "production",
-              "rollout_percentage": 5,
-              "is_rollback": ${{ needs.version.outputs.is_rollback }},
-              "commit_sha": "${{ github.sha }}"
-            }'
+            -d "{
+              \"version\": \"${{ needs.version.outputs.version }}\",
+              \"channel\": \"production\",
+              \"rollout_percentage\": 5,
+              \"is_rollback\": ${{ needs.version.outputs.is_rollback }},
+              \"commit_sha\": \"${{ github.sha }}\",
+              \"release_notes\": $NOTES_JSON
+            }"
 
   # ── Android → Play Store ──────────────────────────────────────────────────────
   # SKIPPED: No Google Play Developer account ($25 one-time fee required).
@@ -318,28 +327,29 @@ jobs:
     steps:
       - name: Monitor crash rate (5 min window)
         run: |
-          sleep 300  # Wait 5 minutes for crash data
+          sleep 300  # Wait 5 minutes for crash data to arrive
 
-          CRASH_RATE=$(curl -s "${{ secrets.MONITORING_URL }}/api/crash-rate/current" \
-            -H "Authorization: Bearer ${{ secrets.MONITORING_API_KEY }}" | \
-            jq -r '.crash_rate // 0')
+          # OTA server is the source of truth — same secrets already in use
+          RESPONSE=$(curl -sf "${{ secrets.OTA_SERVER_URL }}/api/crash-rate/current?channel=production" \
+            -H "Authorization: Bearer ${{ secrets.OTA_API_KEY }}" || echo '{"success":false}')
 
+          CRASH_RATE=$(echo "$RESPONSE" | jq -r '.data.crash_rate // 0')
           echo "Current crash rate: $CRASH_RATE"
 
-          # If crash rate > 5%, trigger rollback
+          # If crash rate > 5%, pause rollout and trigger rollback workflow
           if (( $(echo "$CRASH_RATE > 0.05" | bc -l) )); then
             echo "::error::Crash rate ${CRASH_RATE} exceeds 5% threshold — triggering rollback"
 
-            # Pause OTA rollout
-            curl -X POST "${{ secrets.OTA_SERVER_URL }}/api/releases/current/pause" \
-              -H "Authorization: Bearer ${{ secrets.OTA_API_KEY }}"
+            curl -sf -X POST "${{ secrets.OTA_SERVER_URL }}/api/releases/current/pause" \
+              -H "Authorization: Bearer ${{ secrets.OTA_API_KEY }}" \
+              -H "Content-Type: application/json" \
+              -d '{"reason":"Auto-rollback: crash rate exceeded 5% threshold"}' || true
 
-            # Trigger rollback workflow
             curl -X POST \
               "https://api.github.com/repos/${{ github.repository }}/actions/workflows/production.yml/dispatches" \
               -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
               -H "Content-Type: application/json" \
-              -d '{"ref":"main","inputs":{"rollback_to":"${{ needs.version.outputs.prev_version }}"}}'
+              -d '{"ref":"master","inputs":{"rollback_to":"${{ needs.version.outputs.prev_version }}"}}'
 
             exit 1
           fi

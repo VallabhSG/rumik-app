@@ -3,11 +3,11 @@ import { test, expect } from '@playwright/test';
 test.describe('Home Screen @smoke', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
   });
 
   test('loads and shows rumik branding', async ({ page }) => {
-    await expect(page.locator('text=rumik')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('text=rumik').first()).toBeVisible({ timeout: 15000 });
   });
 
   test('shows feel the music tagline', async ({ page }) => {

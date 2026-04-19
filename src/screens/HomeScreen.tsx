@@ -7,18 +7,68 @@ import {
   ScrollView,
   SafeAreaView,
 } from "react-native";
+import Constants from "expo-constants";
+import {
+  useFeatureFlag,
+  useKillSwitch,
+  useExperiment,
+  useDynamicUrl,
+} from "../hooks/useRemoteConfig";
+import { useOta } from "../contexts/OtaContext";
 
 interface Props {
   onNavigate?: (screen: string) => void;
 }
 
 export default function HomeScreen({ onNavigate }: Props) {
+  // ── Remote config demo ──────────────────────────────────────────────────
+  // Toggle "new_releases" in the admin dashboard to show/hide this section.
+  const { status: otaStatus } = useOta();
+  const showNewReleases = useFeatureFlag("new_releases", false);
+  const showNewOnboarding = useFeatureFlag("new_onboarding", false);
+  const taglineVariant = useExperiment("tagline_test", "control");
+  const apiUrl = useDynamicUrl("api_base_url", "https://api.rumik.app/v1");
+  // Activate "checkout" kill switch in the admin to show the maintenance banner.
+  const checkoutKilled = useKillSwitch("checkout");
+  // ────────────────────────────────────────────────────────────────────────
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.header}>
-          <Text style={styles.logo}>rumik</Text>
-          <Text style={styles.tagline}>feel the music</Text>
+        <View
+          style={[
+            styles.header,
+            taglineVariant === "bold" && styles.headerBold,
+          ]}
+        >
+          <View style={styles.versionBadge}>
+            <Text style={styles.versionBadgeText}>
+              v{Constants.expoConfig?.version ?? "—"}
+              {otaStatus === "available" || otaStatus === "ready"
+                ? " ✦ NEW"
+                : ""}
+            </Text>
+          </View>
+          <Text
+            style={[styles.logo, taglineVariant === "bold" && styles.logoBold]}
+          >
+            rumik
+          </Text>
+          <Text
+            style={[
+              styles.tagline,
+              taglineVariant === "bold" && styles.taglineBold,
+            ]}
+          >
+            {taglineVariant === "bold"
+              ? "YOUR SOUND. YOUR WORLD."
+              : "feel the music"}
+          </Text>
+          <Text style={styles.variantBadge}>
+            {taglineVariant === "bold"
+              ? "🅱 bold variant"
+              : "🅰 control variant"}
+          </Text>
         </View>
 
         <View style={styles.cards}>
@@ -41,11 +91,49 @@ export default function HomeScreen({ onNavigate }: Props) {
           </TouchableOpacity>
         </View>
 
+        {/* Feature flag — enable "new_onboarding" in the admin to reveal */}
+        {showNewOnboarding && (
+          <View style={styles.onboardingBanner} testID="new-onboarding">
+            <Text style={styles.onboardingTitle}>✨ New Experience</Text>
+            <Text style={styles.onboardingText}>
+              We&apos;ve redesigned your onboarding. Tap to explore the new
+              flow.
+            </Text>
+          </View>
+        )}
+
+        {/* Kill switch banner — appears instantly via WebSocket when activated */}
+        {checkoutKilled && (
+          <View style={styles.killBanner} testID="kill-banner">
+            <Text style={styles.killBannerText}>
+              🚫 Checkout is temporarily unavailable. We&apos;re working on it.
+            </Text>
+          </View>
+        )}
+
+        {/* Feature flag — enable "new_releases" in the admin to reveal */}
+        {showNewReleases && (
+          <View style={styles.newSection} testID="new-releases">
+            <Text style={styles.newSectionLabel}>NEW</Text>
+            <Text style={styles.sectionTitle}>New Releases</Text>
+            {NEW_RELEASES.map((track) => (
+              <TrackRow key={track.id} track={track} />
+            ))}
+          </View>
+        )}
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Recently Played</Text>
           {RECENT_TRACKS.map((track) => (
             <TrackRow key={track.id} track={track} />
           ))}
+        </View>
+
+        <View style={styles.configRow} testID="config-api-url">
+          <Text style={styles.configLabel}>API</Text>
+          <Text style={styles.configValue} numberOfLines={1}>
+            {apiUrl}
+          </Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -72,6 +160,11 @@ function TrackRow({ track }: { track: Track }) {
   );
 }
 
+const NEW_RELEASES: Track[] = [
+  { id: "n1", title: "Solar Flare", artist: "Drift Engine", duration: "3:55" },
+  { id: "n2", title: "Midnight Grid", artist: "SYNTH//", duration: "4:02" },
+];
+
 const RECENT_TRACKS: Track[] = [
   { id: "1", title: "Neon Drift", artist: "Axel Nova", duration: "3:42" },
   { id: "2", title: "Blue Static", artist: "LNDN", duration: "2:58" },
@@ -90,7 +183,16 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingTop: 12,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
     gap: 4,
+    borderRadius: 16,
+    backgroundColor: "#0d0d14",
+  },
+  headerBold: {
+    backgroundColor: "#0f1f3d",
+    borderWidth: 1,
+    borderColor: "#3b82f6",
   },
   logo: {
     fontSize: 32,
@@ -98,11 +200,39 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     letterSpacing: -1,
   },
+  logoBold: {
+    color: "#60a5fa",
+    fontSize: 36,
+  },
   tagline: {
     fontSize: 14,
     color: "#6b7280",
     letterSpacing: 1,
     textTransform: "uppercase",
+  },
+  taglineBold: {
+    color: "#93c5fd",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  versionBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: "#7c3aed",
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginBottom: 6,
+  },
+  versionBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#ffffff",
+    letterSpacing: 1,
+  },
+  variantBadge: {
+    fontSize: 10,
+    color: "#4b5563",
+    marginTop: 4,
   },
   cards: {
     flexDirection: "row",
@@ -126,6 +256,44 @@ const styles = StyleSheet.create({
   cardSubtitle: {
     fontSize: 13,
     color: "#9ca3af",
+  },
+  configRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#1f2937",
+  },
+  configLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#3b82f6",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+  configValue: {
+    flex: 1,
+    fontSize: 11,
+    color: "#4b5563",
+    fontFamily: "monospace",
+  },
+  onboardingBanner: {
+    backgroundColor: "#1a2744",
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#3b82f6",
+    gap: 4,
+  },
+  onboardingTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#93c5fd",
+  },
+  onboardingText: {
+    fontSize: 13,
+    color: "#cbd5e1",
   },
   section: {
     gap: 12,
@@ -163,5 +331,32 @@ const styles = StyleSheet.create({
   trackDuration: {
     fontSize: 12,
     color: "#4b5563",
+  },
+  killBanner: {
+    backgroundColor: "#7f1d1d",
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#ef4444",
+  },
+  killBannerText: {
+    color: "#fca5a5",
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  newSection: {
+    gap: 12,
+    borderRadius: 16,
+    backgroundColor: "#0f172a",
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#1e3a5f",
+  },
+  newSectionLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#3b82f6",
+    letterSpacing: 2,
+    textTransform: "uppercase",
   },
 });

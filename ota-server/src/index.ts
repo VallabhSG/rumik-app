@@ -1,8 +1,18 @@
+import http from 'http';
+import path from 'path';
 import express from 'express';
 import { bearerAuth } from './middleware/auth.js';
 import releasesRouter from './routes/releases.js';
 import rollbacksRouter from './routes/rollbacks.js';
 import metricsRouter from './routes/metrics.js';
+import flagsRouter from './routes/flags.js';
+import experimentsRouter from './routes/experiments.js';
+import urlsRouter from './routes/urls.js';
+import killSwitchesRouter, { setBroadcast } from './routes/killSwitches.js';
+import auditLogRouter from './routes/auditLog.js';
+import configRouter from './routes/config.js';
+import { attachWsServer } from './ws.js';
+import { startRolloutScheduler, getSchedulerStatus } from './rolloutScheduler.js';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 4000);
@@ -19,15 +29,38 @@ app.use('/api', bearerAuth);
 app.use('/api/releases', releasesRouter);
 app.use('/api/rollbacks', rollbacksRouter);
 app.use('/api/crash-rate', metricsRouter);
+app.use('/api/flags', flagsRouter);
+app.use('/api/experiments', experimentsRouter);
+app.use('/api/urls', urlsRouter);
+app.use('/api/kill-switches', killSwitchesRouter);
+app.use('/api/audit', auditLogRouter);
+app.use('/api/config', configRouter);
+
+// Rollout scheduler status
+app.get('/api/scheduler', (_req, res) => {
+  res.json({ success: true, data: getSchedulerStatus() });
+});
+
+// Admin dashboard — served as static files (no auth, JS calls API with stored token)
+app.use('/admin', express.static(path.join(__dirname, '../public/admin')));
 
 // 404
 app.use((_req, res) => {
   res.status(404).json({ success: false, error: 'Not found' });
 });
 
-app.listen(PORT, () => {
+const httpServer = http.createServer(app);
+
+// WebSocket server — attach to same HTTP server on path /ws
+const broadcastFn = attachWsServer(httpServer);
+setBroadcast(broadcastFn);
+
+httpServer.listen(PORT, () => {
   const authMode = process.env.OTA_API_KEY ? 'bearer auth enabled' : 'auth disabled (dev)';
   console.log(`OTA server listening on port ${PORT} — ${authMode}`);
+  console.log(`WebSocket server ready on ws://localhost:${PORT}/ws`);
+  startRolloutScheduler();
 });
 
-export default app;
+export { app };
+export default httpServer;
