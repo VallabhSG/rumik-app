@@ -7,7 +7,7 @@ test.describe('Home Screen @smoke', () => {
   });
 
   test('loads and shows rumik branding', async ({ page }) => {
-    await expect(page.locator('text=rumik')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('text=rumik').first()).toBeVisible({ timeout: 15000 });
   });
 
   test('shows feel the music tagline', async ({ page }) => {
