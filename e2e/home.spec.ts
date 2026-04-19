@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Home Screen @smoke', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
   });
 
   test('loads and shows rumik branding', async ({ page }) => {
