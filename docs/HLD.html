@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>High-Level Design — Rumik App OTA + CI/CD System</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #f8f9fa;
+    color: #1a1a2e;
+    padding: 40px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  .cover {
+    text-align: center;
+    padding: 60px 0 40px;
+    border-bottom: 3px solid #4f8ef7;
+    margin-bottom: 48px;
+  }
+  .cover h1 { font-size: 2.4rem; color: #1a1a2e; margin-bottom: 8px; }
+  .cover h2 { font-size: 1.3rem; font-weight: 400; color: #4f8ef7; margin-bottom: 24px; }
+  .cover .meta { font-size: 0.9rem; color: #666; line-height: 1.8; }
+  .badge {
+    display: inline-block;
+    background: #4f8ef7;
+    color: #fff;
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin: 0 4px;
+  }
+
+  section { margin-bottom: 48px; }
+  h2.section-title {
+    font-size: 1.4rem;
+    color: #4f8ef7;
+    border-left: 4px solid #4f8ef7;
+    padding-left: 12px;
+    margin-bottom: 16px;
+  }
+  h3 { font-size: 1.05rem; color: #1a1a2e; margin: 20px 0 10px; }
+  p { color: #444; line-height: 1.7; margin-bottom: 12px; font-size: 0.95rem; }
+
+  .diagram-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 28px 24px;
+    margin: 20px 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+  .diagram-card .caption {
+    text-align: center;
+    font-size: 0.82rem;
+    color: #888;
+    margin-top: 12px;
+    font-style: italic;
+  }
+
+  .tech-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin: 16px 0;
+  }
+  .tech-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 16px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  }
+  .tech-card h4 { font-size: 0.85rem; color: #4f8ef7; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .tech-card ul { list-style: none; }
+  .tech-card ul li { font-size: 0.88rem; color: #444; padding: 2px 0; }
+  .tech-card ul li::before { content: '• '; color: #4f8ef7; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    margin: 16px 0;
+  }
+  th {
+    background: #4f8ef7;
+    color: #fff;
+    padding: 10px 14px;
+    text-align: left;
+    font-weight: 600;
+  }
+  td {
+    padding: 10px 14px;
+    border-bottom: 1px solid #e2e8f0;
+    color: #444;
+  }
+  tr:nth-child(even) td { background: #f8f9fa; }
+
+  .pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .pill.green { background: #d1fae5; color: #065f46; }
+  .pill.blue  { background: #dbeafe; color: #1e40af; }
+  .pill.orange{ background: #fef3c7; color: #92400e; }
+
+  @media print {
+    body { background: #fff; padding: 20px; }
+    .diagram-card { box-shadow: none; break-inside: avoid; }
+    section { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>High-Level Design</h1>
+  <h2>Rumik App — OTA Update System &amp; CI/CD Pipeline</h2>
+  <div class="meta">
+    <span class="badge">CI/CD</span>
+    <span class="badge">OTA Updates</span>
+    <span class="badge">Monitoring</span>
+    <span class="badge">React Native</span>
+    <br/><br/>
+    Author: VallabhSG &nbsp;|&nbsp; Branch: fix/ota-asyncstorage-resilience &nbsp;|&nbsp; 2026
+  </div>
+</div>
+
+<!-- ── 1. Overview ── -->
+<section>
+  <h2 class="section-title">1. System Overview</h2>
+  <p>
+    Rumik is a React Native (Expo) mobile application augmented with a custom Over-The-Air (OTA)
+    update control plane. The system enables staged JS bundle rollouts, real-time feature flag
+    management, crash-triggered auto-rollback, performance monitoring, and a full CI/CD pipeline
+    across seven GitHub Actions workflows.
+  </p>
+  <p>
+    The architecture is split into three tiers: the <strong>mobile client</strong>,
+    the <strong>OTA control plane server</strong>, and the <strong>CI/CD pipeline</strong>.
+    An admin single-page application provides operational visibility across all three tiers.
+  </p>
+
+  <div class="tech-grid">
+    <div class="tech-card">
+      <h4>Mobile Client</h4>
+      <ul>
+        <li>React Native + Expo</li>
+        <li>expo-updates (bundle delivery)</li>
+        <li>TypeScript</li>
+        <li>AsyncStorage</li>
+        <li>WebSocket client</li>
+      </ul>
+    </div>
+    <div class="tech-card">
+      <h4>OTA Server</h4>
+      <ul>
+        <li>Node.js + Express</li>
+        <li>TypeScript</li>
+        <li>better-sqlite3</li>
+        <li>Zod validation</li>
+        <li>WebSocket (ws)</li>
+      </ul>
+    </div>
+    <div class="tech-card">
+      <h4>CI/CD &amp; Infra</h4>
+      <ul>
+        <li>GitHub Actions (7 workflows)</li>
+        <li>EAS Build (Expo)</li>
+        <li>Vercel (web)</li>
+        <li>Firebase (Android)</li>
+        <li>TestFlight (iOS)</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ── 2. System Context ── -->
+<section>
+  <h2 class="section-title">2. System Context Diagram</h2>
+  <p>Shows all external actors and systems that interact with the Rumik platform.</p>
+  <div class="diagram-card">
+    <div class="mermaid">
+graph TB
+    User(["📱 End User\n(Mobile App)"])
+    Dev(["👨‍💻 Developer\n(GitHub)"])
+    Admin(["🔧 Operator\n(Admin Dashboard)"])
+
+    subgraph Rumik["Rumik Platform"]
+      App["React Native App\n(iOS / Android / Web)"]
+      Server["OTA Control Plane\n(Node + SQLite)"]
+      AdminUI["Admin SPA\n(/admin)"]
+    end
+
+    subgraph External["External Services"]
+      Expo["Expo EAS\n(JS bundle CDN)"]
+      Vercel["Vercel\n(Web Hosting)"]
+      Firebase["Firebase\n(Android Distribution)"]
+      TF["TestFlight\n(iOS Distribution)"]
+      Slack["Slack Webhook\n(Alerts)"]
+      GH["GitHub Actions\n(CI/CD)"]
+    end
+
+    User --> App
+    App <-->|"OTA check / events\nconfig / perf / errors"| Server
+    Admin --> AdminUI --> Server
+    Dev -->|"push / PR / tag"| GH
+    GH -->|"EAS submit"| Expo
+    GH -->|"deploy"| Vercel
+    GH -->|"distribute"| Firebase
+    GH -->|"submit"| TF
+    App <-->|"JS bundle\nfetch"| Expo
+    Server -->|"alert webhook"| Slack
+    </div>
+    <div class="caption">Figure 1 — System Context: Rumik platform and external integrations</div>
+  </div>
+</section>
+
+<!-- ── 3. Component Architecture ── -->
+<section>
+  <h2 class="section-title">3. Component Architecture</h2>
+  <p>High-level decomposition of the system into major components and their responsibilities.</p>
+  <div class="diagram-card">
+    <div class="mermaid">
+graph TB
+    subgraph MobileApp["Mobile Application Layer"]
+      direction LR
+      UI["UI Layer\nHomeScreen · UpdateBanner"]
+      Hooks["Hook Layer\nuseOtaUpdate · useRemoteConfig"]
+      Ctx["Context Layer\nOtaContext"]
+      Services["Service Layer\nOtaClient · PerfTracker\nEventReporter · ErrorReporter\nCrashTracker · ConfigClient"]
+    end
+
+    subgraph ServerLayer["OTA Control Plane"]
+      direction LR
+      API["REST API\n13 route modules"]
+      BG["Background Jobs\nAlert Engine · Rollout Scheduler"]
+      WS["WebSocket Server\nLive push to clients"]
+      DB[("SQLite\n14 tables")]
+    end
+
+    subgraph CICD["CI/CD Pipeline"]
+      direction LR
+      PR["PR Validation"]
+      Staging["Staging Deploy"]
+      Prod["Production Deploy"]
+      RB["Rollback Workflow"]
+    end
+
+    subgraph AdminLayer["Admin Dashboard"]
+      SPA["Single Page App\n10 tabs · Chart.js 4"]
+    end
+
+    UI --> Hooks --> Ctx --> Services
+    Services <-->|"HTTPS"| API
+    Services <-->|"WS"| WS
+    API --> DB
+    BG --> DB
+    WS --> DB
+    AdminLayer <-->|"HTTPS"| API
+    CICD -->|"EAS / Vercel"| MobileApp
+    CICD -->|"deploy"| ServerLayer
+    </div>
+    <div class="caption">Figure 2 — Component architecture with layer boundaries</div>
+  </div>
+</section>
+
+<!-- ── 4. CI/CD Pipeline ── -->
+<section>
+  <h2 class="section-title">4. CI/CD Pipeline Architecture</h2>
+  <p>Seven GitHub Actions workflows cover the full software delivery lifecycle.</p>
+  <div class="diagram-card">
+    <div class="mermaid">
+flowchart LR
+    PR["Pull Request\nopened / updated"] -->|trigger| V["pr-validation\n• Prettier check\n• TypeScript check\n• Jest + coverage\n• Bundle size guard\n• Lighthouse CI\n• Playwright E2E"]
+
+    Merge["Merge → master"] -->|trigger| BT["build-test\n• Jest tests\n• Web export\n• EAS preview build"]
+    Merge -->|trigger| Stage["staging\n• EAS Android → Firebase\n• EAS iOS → TestFlight\n• Web → Vercel preview"]
+
+    Tag["git tag vX.Y.Z"] -->|trigger| Rel["release-tag\n• GitHub Release\n• Changelog\n• Semver bump"]
+    Tag -->|trigger| ProdDeploy["production\n• EAS submit stores\n• Vercel production\n• Notify team"]
+
+    Manual["Manual Dispatch"] -->|trigger| RB["rollback\n• Environment approval\n• OTA version pin\n• Slack notification"]
+    Manual -->|trigger| APK["build-android-apk\n• Debug APK\n• Upload artifact"]
+
+    style V fill:#dbeafe,stroke:#3b82f6
+    style BT fill:#d1fae5,stroke:#10b981
+    style Stage fill:#fef3c7,stroke:#f59e0b
+    style ProdDeploy fill:#fce7f3,stroke:#ec4899
+    style RB fill:#fee2e2,stroke:#ef4444
+    style Rel fill:#ede9fe,stroke:#8b5cf6
+    style APK fill:#f3f4f6,stroke:#6b7280
+    </div>
+    <div class="caption">Figure 3 — CI/CD workflows and their triggers</div>
+  </div>
+
+  <table>
+    <thead><tr><th>Workflow</th><th>Trigger</th><th>Target</th><th>SLA</th></tr></thead>
+    <tbody>
+      <tr><td>pr-validation</td><td>PR open/push</td><td>All branches</td><td class="pill blue">~4 min</td></tr>
+      <tr><td>build-test</td><td>Push to master</td><td>master</td><td class="pill blue">~6 min</td></tr>
+      <tr><td>staging</td><td>Push to master</td><td>Staging env</td><td class="pill orange">~15 min</td></tr>
+      <tr><td>production</td><td>Tag push</td><td>Prod env</td><td class="pill orange">~20 min</td></tr>
+      <tr><td>release-tag</td><td>Tag push</td><td>GitHub</td><td class="pill green">~2 min</td></tr>
+      <tr><td>rollback</td><td>Manual dispatch</td><td>Prod env</td><td class="pill green">~3 min</td></tr>
+      <tr><td>build-android-apk</td><td>Manual dispatch</td><td>Artifact</td><td class="pill orange">~10 min</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ── 5. OTA Update Flow ── -->
+<section>
+  <h2 class="section-title">5. OTA Update Distribution Flow</h2>
+  <p>
+    JavaScript bundles are delivered via Expo's CDN. The OTA control plane manages eligibility,
+    rollout percentage, and crash-triggered rollback independently.
+  </p>
+  <div class="diagram-card">
+    <div class="mermaid">
+sequenceDiagram
+    participant App as Mobile App
+    participant CP as OTA Control Plane
+    participant Expo as Expo Updates CDN
+    participant Admin as Admin Dashboard
+
+    App->>CP: GET /api/releases/current?channel=production&platform=ios
+    CP-->>App: { version, rollout_percentage, min_native_version }
+
+    App->>App: DJB2 hash(installId) % 100 ≤ rollout_percentage?
+    App->>App: nativeVersion in [min, max] range?
+
+    alt Eligible for update
+        App->>CP: POST /api/update-events { event_type: eligible }
+        App->>Expo: checkForUpdateAsync()
+        Expo-->>App: Update manifest available
+        App->>CP: POST /api/update-events { event_type: download_start }
+        App->>Expo: fetchUpdateAsync()
+        App->>CP: POST /api/perf-metrics { metric: update_download_ms }
+        App->>CP: POST /api/update-events { event_type: applied }
+        App->>App: reloadAsync() on next foreground
+    else Not eligible
+        App->>CP: POST /api/update-events { event_type: skipped }
+    end
+
+    Admin->>CP: GET /api/update-events/funnel?release_id=...
+    CP-->>Admin: { eligible: 1000, applied: 823, failure_rate: 0.02 }
+    </div>
+    <div class="caption">Figure 4 — OTA update eligibility check and delivery sequence</div>
+  </div>
+</section>
+
+<!-- ── 6. Staged Rollout ── -->
+<section>
+  <h2 class="section-title">6. Staged Rollout &amp; Auto-Rollback</h2>
+  <div class="diagram-card">
+    <div class="mermaid">
+stateDiagram-v2
+    [*] --> Stage1 : Release created
+    Stage1 : 5% Rollout\n(wait 1 hour)
+    Stage2 : 25% Rollout\n(wait 4 hours)
+    Stage3 : 50% Rollout\n(wait 12 hours)
+    Stage4 : 100% Rollout\n(full production)
+    Paused : Paused\n(manual / crash guard)
+    RolledBack : Rolled Back\n(previous version active)
+
+    Stage1 --> Stage2 : crash_rate ≤ 5%\n&amp; time elapsed
+    Stage2 --> Stage3 : crash_rate ≤ 5%\n&amp; time elapsed
+    Stage3 --> Stage4 : crash_rate ≤ 5%\n&amp; time elapsed
+    Stage4 --> [*] : Fully deployed
+
+    Stage1 --> Paused : crash_rate > 5%
+    Stage2 --> Paused : crash_rate > 5%
+    Stage3 --> Paused : crash_rate > 5%
+
+    Paused --> Stage1 : Manual resume
+    Paused --> RolledBack : Manual rollback
+    Stage1 --> RolledBack : Auto-rollback\n(client threshold)
+    Stage2 --> RolledBack : Auto-rollback\n(client threshold)
+    </div>
+    <div class="caption">Figure 5 — Rollout state machine with crash guard and auto-rollback</div>
+  </div>
+</section>
+
+<!-- ── 7. Monitoring ── -->
+<section>
+  <h2 class="section-title">7. Monitoring &amp; Alerting Architecture</h2>
+  <div class="diagram-card">
+    <div class="mermaid">
+graph LR
+    subgraph ClientSDK["Client SDK (Part D)"]
+      PT["PerfTracker\nflush every 30s"]
+      ER["EventReporter\nfire-and-forget + queue"]
+      ERR["ErrorReporter\nglobal error handler"]
+    end
+
+    subgraph ServerAPIs["Server APIs"]
+      PerfAPI["/api/perf-metrics\nP50/P95/P99 aggregation"]
+      EventsAPI["/api/update-events\nAdoption funnel"]
+      ErrorsAPI["/api/errors\nFingerprint dedup"]
+      AlertsAPI["/api/alerts\nRule CRUD + history"]
+      CrashAPI["/api/crash-rate\nIngest + history"]
+    end
+
+    subgraph Engine["Background Engine"]
+      AE["Alert Engine\nevery 5 min\n5 metric types"]
+    end
+
+    Slack["🔔 Slack\nWebhook"]
+    AdminDash["Admin Dashboard\nMonitoring · Adoption · Errors tabs"]
+
+    PT -->|"startup_ms\nupdate_download_ms\njs_fps · memory_mb"| PerfAPI
+    ER -->|"eligible→applied\nevent lifecycle"| EventsAPI
+    ERR -->|"JS errors\nwith stack trace"| ErrorsAPI
+    CrashAPI --> AE
+    PerfAPI --> AE
+    EventsAPI --> AE
+    AE -->|"threshold breached"| Slack
+    AE --> AlertsAPI
+    PerfAPI --> AdminDash
+    EventsAPI --> AdminDash
+    ErrorsAPI --> AdminDash
+    AlertsAPI --> AdminDash
+    </div>
+    <div class="caption">Figure 6 — Monitoring pipeline: client SDK → server APIs → alert engine → notifications</div>
+  </div>
+</section>
+
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: 'default', securityLevel: 'loose' });
+</script>
+</body>
+</html>
