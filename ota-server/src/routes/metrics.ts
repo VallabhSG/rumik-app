@@ -65,4 +65,10 @@ router.post('/', (req: Request, res: Response) => {
   res.status(201).json({ success: true, data: { id, crash_rate, version, channel, recorded_at: now } });
 });
 
+// DELETE /api/crash-rate — wipe all crash rate history
+router.delete('/', (_req: Request, res: Response) => {
+  db.prepare('DELETE FROM crash_rates').run();
+  res.json({ success: true });
+});
+
 export default router;
