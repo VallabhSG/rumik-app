@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>rumik — Remote Config Admin</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<header>
+  <h1>rumik</h1>
+  <span class="badge">Remote Config</span>
+</header>
+
+<main>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" data-tab="monitoring">
+      Monitoring <span id="alert-badge" class="alert-badge hidden"></span>
+    </button>
+    <button class="tab" data-tab="adoption">Adoption</button>
+    <button class="tab" data-tab="errors">Errors <span id="error-badge" class="alert-badge error-badge-color hidden"></span></button>
+    <button class="tab" data-tab="flags">Feature Flags</button>
+    <button class="tab" data-tab="experiments">Experiments</button>
+    <button class="tab" data-tab="urls">Dynamic URLs</button>
+    <button class="tab" data-tab="kills">Kill Switches</button>
+    <button class="tab" data-tab="releases">Releases</button>
+    <button class="tab" data-tab="metrics">Crash Metrics</button>
+    <button class="tab" data-tab="audit">Audit Log</button>
+  </div>
+
+  <!-- ── Monitoring ── -->
+  <div id="panel-monitoring" class="panel active">
+    <div class="toolbar">
+      <h2>Monitoring</h2>
+      <button id="btn-refresh-monitoring" class="btn btn-ghost">Refresh</button>
+    </div>
+
+    <div class="chart-grid">
+      <div class="chart-card">
+        <div class="chart-title">Crash Rate — last 24h</div>
+        <div class="chart-wrap"><canvas id="chart-crash-trend"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Performance P95 — last 24h</div>
+        <div class="chart-wrap"><canvas id="chart-perf-trend"></canvas></div>
+      </div>
+    </div>
+
+    <div id="active-alerts-wrap" style="margin-top:24px">
+      <div class="section-label">Active Alert Rules</div>
+      <div id="active-alerts-list"></div>
+    </div>
+
+    <div style="margin-top:24px">
+      <div class="toolbar">
+        <div class="section-label" style="margin-bottom:0">Alert Rules</div>
+        <button id="btn-add-alert" class="btn btn-primary">+ Add Rule</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th><th>Metric</th><th>Condition</th><th>Channel</th>
+              <th>Window</th><th>Status</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="alert-rules-table">
+            <tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div style="margin-top:24px">
+      <div class="section-label">Recent Alert History</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Time</th><th>Rule</th><th>Value</th><th>Status</th></tr>
+          </thead>
+          <tbody id="alert-history-table">
+            <tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Adoption ── -->
+  <div id="panel-adoption" class="panel">
+    <div class="toolbar">
+      <h2>Update Adoption</h2>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="adoption-release-select" style="background:var(--surface-alt);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px">
+          <option value="">Select release…</option>
+        </select>
+        <button id="btn-refresh-adoption" class="btn btn-ghost">Refresh</button>
+      </div>
+    </div>
+
+    <div class="chart-grid">
+      <div class="chart-card">
+        <div class="chart-title">Adoption Funnel</div>
+        <div class="chart-wrap chart-wrap-tall"><canvas id="chart-funnel"></canvas></div>
+        <div id="funnel-stats" class="funnel-stats"></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Adoption Velocity (applied/h)</div>
+        <div class="chart-wrap"><canvas id="chart-velocity"></canvas></div>
+      </div>
+    </div>
+
+    <div style="margin-top:24px">
+      <div class="section-label">Rollout Health</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Version</th><th>Channel</th><th>Rollout %</th><th>Adoption</th><th>Crash Rate</th><th>Stage</th><th>Status</th></tr>
+          </thead>
+          <tbody id="rollout-health-table">
+            <tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Errors ── -->
+  <div id="panel-errors" class="panel">
+    <div class="toolbar">
+      <h2>Error Tracking</h2>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="error-status-filter" style="background:var(--surface-alt);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px">
+          <option value="open">Open</option>
+          <option value="resolved">Resolved</option>
+          <option value="ignored">Ignored</option>
+          <option value="">All</option>
+        </select>
+        <button id="btn-refresh-errors" class="btn btn-ghost">Refresh</button>
+      </div>
+    </div>
+
+    <div class="chart-grid" style="grid-template-columns:1fr">
+      <div class="chart-card">
+        <div class="chart-title">Error Rate — last 24h</div>
+        <div class="chart-wrap chart-wrap-sm"><canvas id="chart-error-rate"></canvas></div>
+      </div>
+    </div>
+
+    <div style="margin-top:24px">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Error</th><th>Count</th><th>Devices</th><th>Version</th><th>Last Seen</th><th>Status</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="errors-table">
+            <tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pagination">
+        <span id="errors-total"></span>
+        <button id="btn-errors-prev" class="btn btn-ghost" disabled>← Prev</button>
+        <button id="btn-errors-next" class="btn btn-ghost">Next →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Feature Flags ── -->
+  <div id="panel-flags" class="panel active">
+    <div class="toolbar">
+      <h2>Feature Flags</h2>
+      <button id="btn-add-flag" class="btn btn-primary">+ Add Flag</button>
+    </div>
+    <div id="flags-wrap" class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Key</th>
+            <th>Status</th>
+            <th>Description</th>
+            <th>Targeting</th>
+            <th>Updated</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="flags-table">
+          <tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Experiments ── -->
+  <div id="panel-experiments" class="panel">
+    <div class="toolbar">
+      <h2>Experiments</h2>
+      <button id="btn-add-experiment" class="btn btn-primary">+ Add Experiment</button>
+    </div>
+    <div id="experiments-wrap" class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Key</th>
+            <th>Status</th>
+            <th>Variants</th>
+            <th>Updated</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="experiments-table">
+          <tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Dynamic URLs ── -->
+  <div id="panel-urls" class="panel">
+    <div class="toolbar">
+      <h2>Dynamic URLs</h2>
+      <button id="btn-add-url" class="btn btn-primary">+ Add URL</button>
+    </div>
+    <div id="urls-wrap" class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Key</th>
+            <th>URL</th>
+            <th>Updated</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="urls-table">
+          <tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Kill Switches ── -->
+  <div id="panel-kills" class="panel">
+    <div class="toolbar">
+      <h2>Kill Switches</h2>
+      <button id="btn-add-kill" class="btn btn-primary">+ Add Kill Switch</button>
+    </div>
+    <div id="kills-wrap" class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Key</th>
+            <th>State</th>
+            <th>Reason</th>
+            <th>Updated</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="kills-table">
+          <tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Releases ── -->
+  <div id="panel-releases" class="panel">
+    <div class="toolbar">
+      <h2>OTA Releases</h2>
+      <div style="display:flex;gap:8px">
+        <button id="btn-pause-all" class="btn btn-ghost">Pause Production</button>
+        <button id="btn-add-release" class="btn btn-primary">+ New Release</button>
+      </div>
+    </div>
+
+    <div class="release-current" id="release-current-card">
+      <div class="rc-label">Current Production Release</div>
+      <div class="rc-body" id="rc-body"><span style="color:var(--text-muted)">Loading…</span></div>
+    </div>
+
+    <div id="releases-wrap" class="table-wrap" style="margin-top:16px">
+      <table>
+        <thead>
+          <tr>
+            <th>Version</th>
+            <th>Channel</th>
+            <th>Platform</th>
+            <th>Status</th>
+            <th>Rollout</th>
+            <th>Created</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="releases-table">
+          <tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Crash Metrics ── -->
+  <div id="panel-metrics" class="panel">
+    <div class="toolbar">
+      <h2>Crash Metrics</h2>
+      <button id="btn-record-crash" class="btn btn-primary">+ Record Rate</button>
+    </div>
+
+    <div class="metrics-cards" id="metrics-cards">
+      <div class="metric-card">
+        <div class="metric-label">Current Crash Rate</div>
+        <div class="metric-value" id="metric-rate">—</div>
+        <div class="metric-sub" id="metric-sub">Loading…</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Status</div>
+        <div class="metric-value" id="metric-status">—</div>
+        <div class="metric-sub">based on current rate</div>
+      </div>
+    </div>
+
+    <div style="margin-top:24px">
+      <div class="toolbar">
+        <h3 style="font-size:14px;font-weight:600">History</h3>
+        <div style="display:flex;align-items:center;gap:8px">
+          <select id="metric-channel-filter" style="background:var(--surface-alt);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px">
+            <option value="">All channels</option>
+            <option value="production">production</option>
+            <option value="staging">staging</option>
+          </select>
+          <button id="btn-refresh-metrics" class="btn btn-ghost">Refresh</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Crash Rate</th>
+              <th>Version</th>
+              <th>Channel</th>
+            </tr>
+          </thead>
+          <tbody id="metrics-table">
+            <tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Audit Log ── -->
+  <div id="panel-audit" class="panel">
+    <div class="toolbar">
+      <h2>Audit Log</h2>
+      <button id="btn-refresh-audit" class="btn btn-ghost">Refresh</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Entity Type</th>
+            <th>Entity ID</th>
+            <th>Action</th>
+            <th>Changes</th>
+          </tr>
+        </thead>
+        <tbody id="audit-table">
+          <tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="pagination">
+      <span id="audit-total"></span>
+      <button id="btn-audit-prev" class="btn btn-ghost" disabled>← Prev</button>
+      <button id="btn-audit-next" class="btn btn-ghost">Next →</button>
+    </div>
+  </div>
+
+</main>
+
+<!-- Modal -->
+<div id="modal-overlay" class="overlay hidden">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-header">
+      <h3 id="modal-title">Dialog</h3>
+      <button id="modal-close" class="modal-close" aria-label="Close">×</button>
+    </div>
+    <div id="modal-body" class="modal-body"></div>
+    <div class="modal-footer">
+      <button id="modal-cancel" class="btn btn-ghost">Cancel</button>
+      <button id="modal-confirm" class="btn btn-primary">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toasts -->
+<div id="toast-container"></div>
+
+<script src="charts.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

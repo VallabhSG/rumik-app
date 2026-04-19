@@ -104,6 +104,100 @@ db.exec(`
     assigned_at   TEXT NOT NULL,
     PRIMARY KEY (install_id, experiment_id)
   );
+
+  -- Part D: Performance Metrics
+  CREATE TABLE IF NOT EXISTS perf_metrics (
+    id          TEXT PRIMARY KEY,
+    device_id   TEXT NOT NULL,
+    version     TEXT NOT NULL,
+    channel     TEXT NOT NULL DEFAULT 'production',
+    platform    TEXT NOT NULL,
+    metric_type TEXT NOT NULL,
+    value       REAL NOT NULL,
+    session_id  TEXT,
+    recorded_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_perf_version  ON perf_metrics(version, metric_type);
+  CREATE INDEX IF NOT EXISTS idx_perf_recorded ON perf_metrics(recorded_at);
+
+  -- Part D: Update Lifecycle Events (adoption funnel)
+  CREATE TABLE IF NOT EXISTS update_events (
+    id          TEXT PRIMARY KEY,
+    device_id   TEXT NOT NULL,
+    release_id  TEXT NOT NULL,
+    version     TEXT NOT NULL,
+    channel     TEXT NOT NULL,
+    platform    TEXT NOT NULL,
+    event_type  TEXT NOT NULL,
+    error_msg   TEXT,
+    metadata    TEXT,
+    recorded_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_events_release  ON update_events(release_id, event_type);
+  CREATE INDEX IF NOT EXISTS idx_events_device   ON update_events(device_id);
+  CREATE INDEX IF NOT EXISTS idx_events_recorded ON update_events(recorded_at);
+
+  -- Part D: Alert Rules
+  CREATE TABLE IF NOT EXISTS alert_rules (
+    id            TEXT PRIMARY KEY,
+    name          TEXT NOT NULL,
+    metric        TEXT NOT NULL,
+    operator      TEXT NOT NULL,
+    threshold     REAL NOT NULL,
+    channel       TEXT DEFAULT 'production',
+    version       TEXT,
+    window_mins   INTEGER DEFAULT 60,
+    cooldown_mins INTEGER DEFAULT 30,
+    enabled       INTEGER DEFAULT 1,
+    webhook_url   TEXT NOT NULL,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+  );
+
+  -- Part D: Alert History
+  CREATE TABLE IF NOT EXISTS alert_history (
+    id           TEXT PRIMARY KEY,
+    rule_id      TEXT NOT NULL,
+    metric_value REAL NOT NULL,
+    fired_at     TEXT NOT NULL,
+    payload      TEXT NOT NULL,
+    status       TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_alert_history_rule ON alert_history(rule_id, fired_at);
+
+  -- Part D: Error Groups (deduplication by fingerprint)
+  CREATE TABLE IF NOT EXISTS error_groups (
+    id          TEXT PRIMARY KEY,
+    fingerprint TEXT NOT NULL UNIQUE,
+    title       TEXT NOT NULL,
+    error_type  TEXT NOT NULL,
+    first_seen  TEXT NOT NULL,
+    last_seen   TEXT NOT NULL,
+    event_count INTEGER DEFAULT 1,
+    device_count INTEGER DEFAULT 1,
+    version     TEXT NOT NULL,
+    channel     TEXT NOT NULL,
+    status      TEXT DEFAULT 'open',
+    updated_at  TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_error_groups_fp     ON error_groups(fingerprint);
+  CREATE INDEX IF NOT EXISTS idx_error_groups_status ON error_groups(status, last_seen);
+
+  -- Part D: Error Events (individual occurrences)
+  CREATE TABLE IF NOT EXISTS error_events (
+    id          TEXT PRIMARY KEY,
+    group_id    TEXT NOT NULL,
+    device_id   TEXT NOT NULL,
+    version     TEXT NOT NULL,
+    platform    TEXT NOT NULL,
+    error_type  TEXT NOT NULL,
+    message     TEXT NOT NULL,
+    stack_trace TEXT NOT NULL,
+    context     TEXT,
+    recorded_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_error_events_group    ON error_events(group_id, recorded_at);
+  CREATE INDEX IF NOT EXISTS idx_error_events_recorded ON error_events(recorded_at);
 `);
 
 // Migration: add rollout_advanced_at to existing DBs that predate this column

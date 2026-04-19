@@ -11,8 +11,13 @@ import urlsRouter from './routes/urls.js';
 import killSwitchesRouter, { setBroadcast } from './routes/killSwitches.js';
 import auditLogRouter from './routes/auditLog.js';
 import configRouter from './routes/config.js';
+import perfMetricsRouter from './routes/perfMetrics.js';
+import updateEventsRouter from './routes/updateEvents.js';
+import alertsRouter from './routes/alerts.js';
+import errorsRouter from './routes/errors.js';
 import { attachWsServer } from './ws.js';
 import { startRolloutScheduler, getSchedulerStatus } from './rolloutScheduler.js';
+import { runAlertEngine } from './services/alertEngine.js';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 4000);
@@ -35,6 +40,10 @@ app.use('/api/urls', urlsRouter);
 app.use('/api/kill-switches', killSwitchesRouter);
 app.use('/api/audit', auditLogRouter);
 app.use('/api/config', configRouter);
+app.use('/api/perf-metrics', perfMetricsRouter);
+app.use('/api/update-events', updateEventsRouter);
+app.use('/api/alerts', alertsRouter);
+app.use('/api/errors', errorsRouter);
 
 // Rollout scheduler status
 app.get('/api/scheduler', (_req, res) => {
@@ -60,6 +69,8 @@ httpServer.listen(PORT, () => {
   console.log(`OTA server listening on port ${PORT} — ${authMode}`);
   console.log(`WebSocket server ready on ws://localhost:${PORT}/ws`);
   startRolloutScheduler();
+  // Alert engine: evaluate rules every 5 minutes
+  setInterval(() => { runAlertEngine().catch(e => console.error('[alertEngine] error:', e)); }, 5 * 60_000);
 });
 
 export { app };

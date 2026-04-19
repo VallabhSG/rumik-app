@@ -1,0 +1,87 @@
+import { createHash } from 'crypto';
+import { v4 as uuid } from 'uuid';
+import db from '../db.js';
+
+interface StackFrame {
+  file: string;
+  line?: number;
+  column?: number;
+  func?: string;
+}
+
+interface ErrorPayload {
+  device_id: string;
+  version: string;
+  channel: string;
+  platform: string;
+  error_type: string;
+  message: string;
+  stack_trace: StackFrame[];
+  context?: Record<string, unknown>;
+}
+
+interface ErrorGroup {
+  id: string;
+  fingerprint: string;
+  event_count: number;
+  device_count: number;
+}
+
+function computeFingerprint(errorType: string, stackTrace: StackFrame[]): string {
+  const top = stackTrace.slice(0, 3).map(f => `${f.file}::${f.func ?? '?'}`).join('|');
+  return createHash('sha256').update(`${errorType}::${top}`).digest('hex').slice(0, 16);
+}
+
+export function groupError(payload: ErrorPayload): { group_id: string; is_new: boolean } {
+  const fingerprint = computeFingerprint(payload.error_type, payload.stack_trace);
+  const now = new Date().toISOString();
+
+  const existing = db.prepare('SELECT * FROM error_groups WHERE fingerprint = ?').get(fingerprint) as ErrorGroup | undefined;
+
+  let group_id: string;
+  let is_new: boolean;
+
+  if (existing) {
+    group_id = existing.id;
+    is_new = false;
+
+    // Check if this device is new to the group
+    const deviceSeen = db.prepare(
+      'SELECT 1 FROM error_events WHERE group_id = ? AND device_id = ? LIMIT 1',
+    ).get(existing.id, payload.device_id);
+
+    db.prepare(`
+      UPDATE error_groups
+      SET event_count = event_count + 1,
+          device_count = device_count + ?,
+          last_seen = ?,
+          updated_at = ?
+      WHERE id = ?
+    `).run(deviceSeen ? 0 : 1, now, now, existing.id);
+  } else {
+    group_id = uuid();
+    is_new = true;
+
+    const title = `${payload.error_type}: ${payload.message}`.slice(0, 200);
+    db.prepare(`
+      INSERT INTO error_groups
+        (id, fingerprint, title, error_type, first_seen, last_seen, event_count, device_count, version, channel, status, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, ?, 'open', ?)
+    `).run(group_id, fingerprint, title, payload.error_type, now, now, payload.version, payload.channel, now);
+  }
+
+  // Always insert the individual event
+  db.prepare(`
+    INSERT INTO error_events
+      (id, group_id, device_id, version, platform, error_type, message, stack_trace, context, recorded_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    uuid(), group_id, payload.device_id, payload.version, payload.platform,
+    payload.error_type, payload.message,
+    JSON.stringify(payload.stack_trace),
+    payload.context ? JSON.stringify(payload.context) : null,
+    now,
+  );
+
+  return { group_id, is_new };
+}
