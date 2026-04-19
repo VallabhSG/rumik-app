@@ -180,7 +180,8 @@ export class OtaClient {
   async downloadAndStage(): Promise<UpdateStatus> {
     this.onStatus("downloading");
     const release = this.currentRelease;
-    if (release) this.eventReporter?.report(release.id, release.version, "download_start");
+    if (release)
+      this.eventReporter?.report(release.id, release.version, "download_start");
     const downloadStart = Date.now();
 
     try {
@@ -197,7 +198,13 @@ export class OtaClient {
           if (release) {
             const ms = Date.now() - downloadStart;
             this.perfTracker?.recordUpdateDownload(ms);
-            this.eventReporter?.report(release.id, release.version, "download_complete", undefined, { duration_ms: ms });
+            this.eventReporter?.report(
+              release.id,
+              release.version,
+              "download_complete",
+              undefined,
+              { duration_ms: ms },
+            );
             this.eventReporter?.report(release.id, release.version, "staged");
           }
           this.onStatus("ready");
@@ -225,8 +232,18 @@ export class OtaClient {
       if (resolvedRelease) {
         await storage.setPreviousVersion(prev);
         await storage.setCurrentVersion(resolvedRelease.version);
-        this.eventReporter?.report(resolvedRelease.id, resolvedRelease.version, "download_complete", undefined, { duration_ms: downloadMs });
-        this.eventReporter?.report(resolvedRelease.id, resolvedRelease.version, "staged");
+        this.eventReporter?.report(
+          resolvedRelease.id,
+          resolvedRelease.version,
+          "download_complete",
+          undefined,
+          { duration_ms: downloadMs },
+        );
+        this.eventReporter?.report(
+          resolvedRelease.id,
+          resolvedRelease.version,
+          "staged",
+        );
       }
 
       this.onStatus("ready");

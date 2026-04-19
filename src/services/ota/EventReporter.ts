@@ -1,14 +1,14 @@
-import type { OtaConfig } from './types';
+import type { OtaConfig } from "./types";
 
 type UpdateEventType =
-  | 'eligible'
-  | 'notified'
-  | 'download_start'
-  | 'download_complete'
-  | 'staged'
-  | 'applied'
-  | 'skipped'
-  | 'failed';
+  | "eligible"
+  | "notified"
+  | "download_start"
+  | "download_complete"
+  | "staged"
+  | "applied"
+  | "skipped"
+  | "failed";
 
 interface PendingEvent {
   event_type: UpdateEventType;
@@ -20,7 +20,11 @@ interface PendingEvent {
 export class EventReporter {
   private config: OtaConfig;
   private deviceId: string;
-  private queue: Array<{ releaseId: string; version: string; event: PendingEvent }> = [];
+  private queue: Array<{
+    releaseId: string;
+    version: string;
+    event: PendingEvent;
+  }> = [];
 
   constructor(deviceId: string, config: OtaConfig) {
     this.deviceId = deviceId;
@@ -59,21 +63,33 @@ export class EventReporter {
     }
     await Promise.allSettled(
       Array.from(groups.entries()).map(([, items]) =>
-        this.sendBatch(items[0].releaseId, items[0].version, items.map(i => i.event)),
+        this.sendBatch(
+          items[0].releaseId,
+          items[0].version,
+          items.map((i) => i.event),
+        ),
       ),
     );
   }
 
-  private async sendEvent(releaseId: string, version: string, event: PendingEvent): Promise<void> {
+  private async sendEvent(
+    releaseId: string,
+    version: string,
+    event: PendingEvent,
+  ): Promise<void> {
     await this.sendBatch(releaseId, version, [event]);
   }
 
-  private async sendBatch(releaseId: string, version: string, events: PendingEvent[]): Promise<void> {
+  private async sendBatch(
+    releaseId: string,
+    version: string,
+    events: PendingEvent[],
+  ): Promise<void> {
     await fetch(`${this.config.serverUrl}/api/update-events`, {
-      method: 'POST',
+      method: "POST",
       headers: {
         Authorization: `Bearer ${this.config.apiKey}`,
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         device_id: this.deviceId,

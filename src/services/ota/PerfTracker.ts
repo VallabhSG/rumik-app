@@ -1,6 +1,11 @@
-import type { OtaConfig } from './types';
+import type { OtaConfig } from "./types";
 
-type MetricType = 'startup_ms' | 'update_download_ms' | 'js_fps' | 'memory_mb' | 'ttfb_ms';
+type MetricType =
+  | "startup_ms"
+  | "update_download_ms"
+  | "js_fps"
+  | "memory_mb"
+  | "ttfb_ms";
 
 interface PerfEvent {
   metric_type: MetricType;
@@ -40,13 +45,25 @@ export class PerfTracker {
   }
 
   record(type: MetricType, value: number): void {
-    this.queue.push({ metric_type: type, value, recorded_at: new Date().toISOString() });
+    this.queue.push({
+      metric_type: type,
+      value,
+      recorded_at: new Date().toISOString(),
+    });
   }
 
-  recordStartupTime(ms: number): void { this.record('startup_ms', ms); }
-  recordUpdateDownload(ms: number): void { this.record('update_download_ms', ms); }
-  recordFrameRate(fps: number): void { this.record('js_fps', fps); }
-  recordMemory(mb: number): void { this.record('memory_mb', mb); }
+  recordStartupTime(ms: number): void {
+    this.record("startup_ms", ms);
+  }
+  recordUpdateDownload(ms: number): void {
+    this.record("update_download_ms", ms);
+  }
+  recordFrameRate(fps: number): void {
+    this.record("js_fps", fps);
+  }
+  recordMemory(mb: number): void {
+    this.record("memory_mb", mb);
+  }
 
   async flush(): Promise<void> {
     if (this.queue.length === 0) return;
@@ -58,10 +75,10 @@ export class PerfTracker {
 
     try {
       await fetch(`${this.config.serverUrl}/api/perf-metrics`, {
-        method: 'POST',
+        method: "POST",
         headers: {
           Authorization: `Bearer ${this.config.apiKey}`,
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           device_id: this.deviceId,
