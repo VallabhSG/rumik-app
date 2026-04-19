@@ -228,7 +228,7 @@ classDiagram
 <!-- ── 2. Server API ── -->
 <section>
   <h2 class="section-title">2. Server API Design</h2>
-  <p>All endpoints follow a consistent response envelope: <code>{ success, data, error?, meta? }</code>. Authentication uses Bearer token via <code>Authorization</code> header.</p>
+  <p>All endpoints follow a consistent response envelope: <code>{ success, data, error?, meta? }</code>. Authentication uses Bearer token via <code>Authorization</code> header. Two server instances are deployed — <strong>Staging</strong> and <strong>Production</strong> — each with an independent SQLite database. Release and crash-rate records are scoped by the <code>channel</code> field (<code>staging</code> | <code>production</code>).</p>
 
   <table>
     <thead>
@@ -511,30 +511,64 @@ flowchart TD
 <!-- ── 6. Remote Config ── -->
 <section>
   <h2 class="section-title">6. Remote Config Resolution</h2>
-  <p>The <code>GET /api/config</code> endpoint resolves all config types for a specific device context in a single request, applying targeting rules to each entry.</p>
+  <p>The <code>GET /api/config</code> endpoint resolves all config types for a specific device context in a single request, applying targeting rules to each entry. Staging builds point to the staging server; production builds point to the production server — controlled by the <code>OTA_SERVER_URL</code> environment variable baked in at EAS build time.</p>
   <div class="diagram-card">
     <div class="mermaid">
 sequenceDiagram
-    participant App as Mobile App
-    participant API as GET /api/config
-    participant DB as SQLite
-    participant WS as WebSocket
+    participant StagingApp as Mobile App\n(Staging Build)
+    participant ProdApp as Mobile App\n(Production Build)
+    participant StagingAPI as Staging Server\nGET /api/config
+    participant ProdAPI as Production Server\nGET /api/config
+    participant DB as SQLite (per env)
+    participant WS as WebSocket (per env)
 
-    App->>API: GET /api/config?install_id=abc&platform=ios&version=1.2.0
-    API->>DB: SELECT * FROM feature_flags WHERE enabled=1
-    API->>DB: SELECT * FROM experiments WHERE status='active'
-    API->>DB: SELECT * FROM dynamic_urls
-    API->>DB: SELECT * FROM kill_switches WHERE active=1
-    API->>DB: SELECT * FROM experiment_assignments WHERE install_id=abc
-    API->>API: Apply targeting rules per entry\n(platform, version, percentage)
-    API->>API: Resolve experiment variant\n(DJB2 hash or existing assignment)
-    API-->>App: { flags: {...}, experiments: {...},\n  urls: {...}, kill_switches: [...] }
+    Note over StagingApp,StagingAPI: Staging environment (Firebase / TestFlight Internal)
+    StagingApp->>StagingAPI: GET /api/config?install_id=abc&platform=ios&version=1.2.0
+    StagingAPI->>DB: SELECT * FROM feature_flags WHERE enabled=1
+    StagingAPI->>DB: SELECT * FROM experiments WHERE status='active'
+    StagingAPI->>DB: SELECT * FROM kill_switches WHERE active=1
+    StagingAPI->>DB: SELECT * FROM experiment_assignments WHERE install_id=abc
+    StagingAPI->>StagingAPI: Apply targeting rules\n(platform, version, percentage)
+    StagingAPI-->>StagingApp: { flags, experiments, urls, kill_switches }
 
-    Note over App,WS: WebSocket for live updates
-    WS-->>App: { type: kill_switch, key: X, active: true }
-    App->>App: Immediately disable feature X
+    Note over ProdApp,ProdAPI: Production environment (App Store / Google Play)
+    ProdApp->>ProdAPI: GET /api/config?install_id=xyz&platform=android&version=1.2.0
+    ProdAPI->>DB: SELECT ... (production DB)
+    ProdAPI->>ProdAPI: Apply targeting rules
+    ProdAPI-->>ProdApp: { flags, experiments, urls, kill_switches }
+
+    Note over StagingApp,WS: WebSocket for live updates (both envs)
+    WS-->>StagingApp: { type: kill_switch, key: X, active: true }
+    StagingApp->>StagingApp: Immediately disable feature X
     </div>
-    <div class="caption">Figure 5 — Remote config resolution with targeting and WebSocket live push</div>
+    <div class="caption">Figure 5 — Remote config resolution across staging and production environments</div>
+  </div>
+</section>
+
+<!-- ── 6b. Staging vs Production Deployment ── -->
+<section>
+  <h2 class="section-title">6b. Staging vs Production Deployment</h2>
+  <p>All code is promoted through a staging gate before reaching production. The same OTA server binary is deployed twice with different environment variables.</p>
+  <div class="diagram-card">
+    <div class="mermaid">
+flowchart TD
+    PR["Pull Request\nopened / updated"] --> Validate["pr-validation workflow\n• Prettier · TypeScript · Jest\n• Bundle size · Lighthouse CI\n• Playwright E2E"]
+    Validate -->|pass| Merge["Merge → master"]
+
+    Merge --> StageBuild["staging workflow\n• EAS Android → Firebase App Distribution\n• EAS iOS → TestFlight Internal\n• Web → Vercel Preview URL"]
+    Merge --> ServerStage["Deploy OTA Server → Staging\nOTA_SERVER_URL=staging.ota.example.com\nchannel=staging"]
+
+    StageBuild --> QA["QA / Internal Testing\non staging environment"]
+    ServerStage --> QA
+
+    QA -->|approve| Tag["git tag vX.Y.Z\n→ release-tag workflow"]
+    Tag --> ProdBuild["production workflow\n• EAS Android → Google Play (Internal)\n• EAS iOS → App Store Connect\n• Web → Vercel Production"]
+    Tag --> ServerProd["Deploy OTA Server → Production\nOTA_SERVER_URL=ota.example.com\nchannel=production"]
+
+    ProdBuild --> Monitor["Rollback Monitor\nwatch crash_rate > 5%\n→ auto-rollback workflow"]
+    ServerProd --> Monitor
+    </div>
+    <div class="caption">Figure 5b — Staging gate: every change passes staging before reaching production</div>
   </div>
 </section>
 

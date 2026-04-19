@@ -185,7 +185,7 @@
 <!-- ── 2. System Context ── -->
 <section>
   <h2 class="section-title">2. System Context Diagram</h2>
-  <p>Shows all external actors and systems that interact with the Rumik platform.</p>
+  <p>Shows all external actors and systems that interact with the Rumik platform across staging and production environments.</p>
   <div class="diagram-card">
     <div class="mermaid">
 graph TB
@@ -193,33 +193,44 @@ graph TB
     Dev(["👨‍💻 Developer\n(GitHub)"])
     Admin(["🔧 Operator\n(Admin Dashboard)"])
 
-    subgraph Rumik["Rumik Platform"]
-      App["React Native App\n(iOS / Android / Web)"]
-      Server["OTA Control Plane\n(Node + SQLite)"]
+    subgraph StagingEnv["Staging Environment"]
+      AppStage["React Native App\n(Staging Build)"]
+      ServerStage["OTA Control Plane\n(Staging Instance)"]
+    end
+
+    subgraph ProdEnv["Production Environment"]
+      AppProd["React Native App\n(Production Build)"]
+      ServerProd["OTA Control Plane\n(Production Instance)"]
       AdminUI["Admin SPA\n(/admin)"]
     end
 
     subgraph External["External Services"]
       Expo["Expo EAS\n(JS bundle CDN)"]
-      Vercel["Vercel\n(Web Hosting)"]
-      Firebase["Firebase\n(Android Distribution)"]
-      TF["TestFlight\n(iOS Distribution)"]
+      VercelPrev["Vercel Preview\n(Staging Web)"]
+      VercelProd["Vercel Production\n(Prod Web)"]
+      Firebase["Firebase App Distribution\n(Android Staging)"]
+      TF["TestFlight Internal\n(iOS Staging)"]
       Slack["Slack Webhook\n(Alerts)"]
-      GH["GitHub Actions\n(CI/CD)"]
+      GH["GitHub Actions\n(CI/CD — 7 workflows)"]
     end
 
-    User --> App
-    App <-->|"OTA check / events\nconfig / perf / errors"| Server
-    Admin --> AdminUI --> Server
-    Dev -->|"push / PR / tag"| GH
-    GH -->|"EAS submit"| Expo
-    GH -->|"deploy"| Vercel
-    GH -->|"distribute"| Firebase
-    GH -->|"submit"| TF
-    App <-->|"JS bundle\nfetch"| Expo
-    Server -->|"alert webhook"| Slack
+    User --> AppProd
+    Dev -->|"PR / merge / tag"| GH
+    GH -->|"EAS preview build"| AppStage
+    GH -->|"EAS submit stores"| AppProd
+    GH -->|"distribute APK"| Firebase
+    GH -->|"TestFlight upload"| TF
+    GH -->|"deploy preview"| VercelPrev
+    GH -->|"deploy production"| VercelProd
+
+    AppStage <-->|"OTA check / config"| ServerStage
+    AppProd  <-->|"OTA check / events\nperf / errors / config"| ServerProd
+    Admin --> AdminUI --> ServerProd
+    AppStage <-->|"JS bundle"| Expo
+    AppProd  <-->|"JS bundle"| Expo
+    ServerProd -->|"alert webhook"| Slack
     </div>
-    <div class="caption">Figure 1 — System Context: Rumik platform and external integrations</div>
+    <div class="caption">Figure 1 — System Context: Rumik platform across staging and production environments</div>
   </div>
 </section>
 
@@ -238,35 +249,46 @@ graph TB
       Services["Service Layer\nOtaClient · PerfTracker\nEventReporter · ErrorReporter\nCrashTracker · ConfigClient"]
     end
 
-    subgraph ServerLayer["OTA Control Plane"]
+    subgraph StagingServer["OTA Control Plane — Staging"]
       direction LR
-      API["REST API\n13 route modules"]
-      BG["Background Jobs\nAlert Engine · Rollout Scheduler"]
-      WS["WebSocket Server\nLive push to clients"]
-      DB[("SQLite\n14 tables")]
+      StagingAPI["REST API\n(staging channel)"]
+      StagingBG["Background Jobs\nAlert Engine · Rollout Scheduler"]
+      StagingWS["WebSocket Server"]
+      StagingDB[("SQLite\n14 tables")]
+    end
+
+    subgraph ProdServer["OTA Control Plane — Production"]
+      direction LR
+      ProdAPI["REST API\n(production channel)"]
+      ProdBG["Background Jobs\nAlert Engine · Rollout Scheduler"]
+      ProdWS["WebSocket Server"]
+      ProdDB[("SQLite\n14 tables")]
+      AdminSPA["Admin SPA\n10 tabs · Chart.js 4"]
     end
 
     subgraph CICD["CI/CD Pipeline"]
       direction LR
       PR["PR Validation"]
-      Staging["Staging Deploy"]
-      Prod["Production Deploy"]
+      StageCI["Staging Deploy\nFirebase / TestFlight / Vercel Preview"]
+      ProdCI["Production Deploy\nEAS / Vercel Production"]
       RB["Rollback Workflow"]
     end
 
-    subgraph AdminLayer["Admin Dashboard"]
-      SPA["Single Page App\n10 tabs · Chart.js 4"]
-    end
-
     UI --> Hooks --> Ctx --> Services
-    Services <-->|"HTTPS"| API
-    Services <-->|"WS"| WS
-    API --> DB
-    BG --> DB
-    WS --> DB
-    AdminLayer <-->|"HTTPS"| API
-    CICD -->|"EAS / Vercel"| MobileApp
-    CICD -->|"deploy"| ServerLayer
+    Services <-->|"HTTPS (staging)"| StagingAPI
+    Services <-->|"HTTPS (prod)"| ProdAPI
+    Services <-->|"WS (staging)"| StagingWS
+    Services <-->|"WS (prod)"| ProdWS
+    StagingAPI --> StagingDB
+    StagingBG --> StagingDB
+    StagingWS --> StagingDB
+    ProdAPI --> ProdDB
+    ProdBG --> ProdDB
+    ProdWS --> ProdDB
+    AdminSPA <-->|"HTTPS"| ProdAPI
+    CICD -->|"EAS build"| MobileApp
+    StageCI -->|"deploy"| StagingServer
+    ProdCI -->|"deploy"| ProdServer
     </div>
     <div class="caption">Figure 2 — Component architecture with layer boundaries</div>
   </div>
