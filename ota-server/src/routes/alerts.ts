@@ -2,11 +2,15 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
 import db from '../db.js';
+import { logChange, diffObjects } from '../services/audit.js';
+import logger from '../logger.js';
 
 const router = Router();
 
 const METRICS = ['crash_rate', 'adoption_rate', 'failure_rate', 'p95_startup_ms', 'p95_download_ms'] as const;
 const OPERATORS = ['gt', 'lt', 'gte', 'lte'] as const;
+
+const NOTIFIER_TYPES = ['webhook', 'slack', 'alertmanager'] as const;
 
 const CreateRuleSchema = z.object({
   name: z.string().min(1),
@@ -18,11 +22,13 @@ const CreateRuleSchema = z.object({
   window_mins: z.number().int().min(1).default(60),
   cooldown_mins: z.number().int().min(1).default(30),
   webhook_url: z.string().url(),
+  notifier_type: z.enum(NOTIFIER_TYPES).default('webhook').optional(),
 });
 
 const UpdateRuleSchema = CreateRuleSchema.partial().omit({ webhook_url: true }).extend({
   enabled: z.boolean().optional(),
   webhook_url: z.string().url().optional(),
+  notifier_type: z.enum(NOTIFIER_TYPES).optional(),
 });
 
 interface AlertRule {
@@ -37,6 +43,7 @@ interface AlertRule {
   cooldown_mins: number;
   enabled: number;
   webhook_url: string;
+  notifier_type: string;
   created_at: string;
   updated_at: string;
 }
@@ -55,17 +62,22 @@ router.post('/rules', (req: Request, res: Response) => {
     return;
   }
 
-  const { name, metric, operator, threshold, channel, version, window_mins, cooldown_mins, webhook_url } = parsed.data;
+  const { name, metric, operator, threshold, channel, version, window_mins, cooldown_mins, webhook_url, notifier_type } = parsed.data;
   const now = new Date().toISOString();
   const id = uuid();
 
   db.prepare(`
     INSERT INTO alert_rules
-      (id, name, metric, operator, threshold, channel, version, window_mins, cooldown_mins, enabled, webhook_url, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
-  `).run(id, name, metric, operator, threshold, channel, version ?? null, window_mins, cooldown_mins, webhook_url, now, now);
+      (id, name, metric, operator, threshold, channel, version, window_mins, cooldown_mins, enabled, webhook_url, notifier_type, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
+  `).run(id, name, metric, operator, threshold, channel, version ?? null, window_mins, cooldown_mins, webhook_url, notifier_type ?? 'webhook', now, now);
 
   const rule = db.prepare('SELECT * FROM alert_rules WHERE id = ?').get(id);
+  try {
+    logChange('alert_rule', id, 'created', diffObjects(null, rule as Record<string, unknown>));
+  } catch (e) {
+    logger.warn({ err: e }, 'Audit log write failed');
+  }
   res.status(201).json({ success: true, data: rule });
 });
 
@@ -99,6 +111,14 @@ router.patch('/rules/:id', (req: Request, res: Response) => {
   db.prepare(`UPDATE alert_rules SET ${fields.join(', ')} WHERE id = ?`).run(...params);
 
   const updated = db.prepare('SELECT * FROM alert_rules WHERE id = ?').get(req.params.id);
+  try {
+    logChange('alert_rule', req.params.id, 'updated', diffObjects(
+      rule as unknown as Record<string, unknown>,
+      updated as Record<string, unknown>,
+    ));
+  } catch (e) {
+    logger.warn({ err: e }, 'Audit log write failed');
+  }
   res.json({ success: true, data: updated });
 });
 
@@ -108,6 +128,11 @@ router.delete('/rules/:id', (req: Request, res: Response) => {
   if (result.changes === 0) {
     res.status(404).json({ success: false, error: 'Alert rule not found' });
     return;
+  }
+  try {
+    logChange('alert_rule', req.params.id, 'deleted', null);
+  } catch (e) {
+    logger.warn({ err: e }, 'Audit log write failed');
   }
   res.json({ success: true });
 });

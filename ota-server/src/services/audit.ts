@@ -1,13 +1,15 @@
 import { v4 as uuidv4 } from 'uuid';
 import db from '../db.js';
 
-export type EntityType = 'flag' | 'experiment' | 'url' | 'kill_switch';
+export type EntityType = 'flag' | 'experiment' | 'url' | 'kill_switch' | 'release' | 'alert_rule' | 'rollback';
 export type AuditAction =
   | 'created'
   | 'updated'
   | 'deleted'
   | 'activated'
-  | 'deactivated';
+  | 'deactivated'
+  | 'paused'
+  | 'rolled_back';
 
 export interface AuditEntry {
   id: string;

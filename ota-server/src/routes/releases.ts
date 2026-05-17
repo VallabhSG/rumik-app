@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
 import db from '../db.js';
+import { logChange, diffObjects } from '../services/audit.js';
+import logger from '../logger.js';
 
 const router = Router();
 
@@ -56,7 +58,10 @@ router.get('/current', (req: Request, res: Response) => {
     query += " AND (platform = ? OR platform = 'all')";
     params.push(platform);
   }
-  query += ' ORDER BY rollout_percentage DESC, created_at DESC LIMIT 1';
+  // Order by created_at DESC so the newest active release is returned.
+  // Ordering by rollout_percentage DESC would incorrectly prefer an older
+  // 100%-rolled-out release over a newer partial-rollout release.
+  query += ' ORDER BY created_at DESC LIMIT 1';
 
   const release = db.prepare(query).get(...params);
   if (!release) {
@@ -106,6 +111,11 @@ router.post('/', (req: Request, res: Response) => {
   );
 
   const release = db.prepare('SELECT * FROM releases WHERE id = ?').get(id);
+  try {
+    logChange('release', id, 'created', diffObjects(null, release as Record<string, unknown>));
+  } catch (e) {
+    logger.warn({ err: e }, 'Audit log write failed');
+  }
   res.status(201).json({ success: true, data: parseRelease(release) });
 });
 
@@ -139,6 +149,14 @@ router.patch('/:id', (req: Request, res: Response) => {
   db.prepare(`UPDATE releases SET ${fields.join(', ')} WHERE id = ?`).run(...params);
 
   const updated = db.prepare('SELECT * FROM releases WHERE id = ?').get(req.params.id);
+  try {
+    logChange('release', req.params.id, 'updated', diffObjects(
+      release as Record<string, unknown>,
+      updated as Record<string, unknown>,
+    ));
+  } catch (e) {
+    logger.warn({ err: e }, 'Audit log write failed');
+  }
   res.json({ success: true, data: parseRelease(updated) });
 });
 
@@ -152,6 +170,13 @@ router.post('/current/pause', (req: Request, res: Response) => {
     WHERE channel = ? AND status = 'active'
   `).run(now, channel);
 
+  if (result.changes > 0) {
+    try {
+      logChange('release', channel, 'paused', { channel: { old: null, new: channel }, reason: { old: null, new: reason ?? 'manual' } });
+    } catch (e) {
+      logger.warn({ err: e }, 'Audit log write failed');
+    }
+  }
   res.json({
     success: true,
     data: { paused_count: result.changes, channel, reason: reason ?? 'manual' },
@@ -168,6 +193,11 @@ router.delete('/:id', (req: Request, res: Response) => {
   if (result.changes === 0) {
     res.status(404).json({ success: false, error: 'Release not found' });
     return;
+  }
+  try {
+    logChange('release', req.params.id, 'rolled_back', null);
+  } catch (e) {
+    logger.warn({ err: e }, 'Audit log write failed');
   }
   res.json({ success: true, data: { id: req.params.id, status: 'rolled_back' } });
 });
