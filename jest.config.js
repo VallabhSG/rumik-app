@@ -10,7 +10,10 @@ module.exports = {
     '^expo-constants$': '<rootDir>/__mocks__/expo-constants.js',
   },
   transformIgnorePatterns: [
-    'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg)',
+    // pnpm stores packages under node_modules/.pnpm/.../node_modules/<pkg>
+    // The second pattern handles the hoisted path; the first handles pnpm's deep path.
+    'node_modules/\\.pnpm/(?!.*node_modules/(jest-)?react-native|.*node_modules/@react-native|.*node_modules/expo|.*node_modules/@expo|.*node_modules/@unimodules|.*node_modules/sentry-expo|.*node_modules/native-base|.*node_modules/react-native-svg)',
+    'node_modules/(?!(\\.pnpm|(jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg))',
   ],
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
