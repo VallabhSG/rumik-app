@@ -99,7 +99,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Run tests
-        run: pnpm test -- --coverage --ci --forceExit
+        run: pnpm exec jest --coverage --ci --forceExit
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
