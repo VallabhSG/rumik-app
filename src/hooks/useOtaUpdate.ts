@@ -11,8 +11,8 @@ function buildConfig(): OtaConfig {
     channel: process.env.EXPO_PUBLIC_OTA_CHANNEL ?? "production",
     platform: Platform.OS as "ios" | "android",
     nativeVersion: Application.nativeApplicationVersion ?? "1.0.0",
-    crashThreshold: 0.05, // 5% crash rate → auto-rollback
-    minLaunchesBeforeRollback: 3, // evaluate only after ≥3 launches
+    crashThreshold: Number(process.env.EXPO_PUBLIC_OTA_CRASH_THRESHOLD ?? 0.05),
+    minLaunchesBeforeRollback: Number(process.env.EXPO_PUBLIC_OTA_MIN_LAUNCHES ?? 3),
   };
 }
 

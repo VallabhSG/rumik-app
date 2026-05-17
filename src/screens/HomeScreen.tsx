@@ -20,35 +20,38 @@ interface Props {
   onNavigate?: (screen: string) => void;
 }
 
+// Vary thumbnail backgrounds across the tonal staircase so rows are distinct
+const THUMB_PALETTE = ["#1a1a2e", "#1e1b4b", "#0f1724", "#191320"];
+function thumbBg(id: string): string {
+  return THUMB_PALETTE[id.charCodeAt(0) % THUMB_PALETTE.length];
+}
+
 export default function HomeScreen({ onNavigate }: Props) {
-  // ── Remote config demo ──────────────────────────────────────────────────
-  // Toggle "new_releases" in the admin dashboard to show/hide this section.
+  // ── Remote config ─────────────────────────────────────────────────────────
   const { status: otaStatus } = useOta();
   const showNewReleases = useFeatureFlag("new_releases", false);
   const showNewOnboarding = useFeatureFlag("new_onboarding", false);
   const taglineVariant = useExperiment("tagline_test", "control");
   const apiUrl = useDynamicUrl("api_base_url", "https://api.rumik.app/v1");
-  // Activate "checkout" kill switch in the admin to show the maintenance banner.
   const checkoutKilled = useKillSwitch("checkout");
-  // ────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        <View
-          style={[
-            styles.header,
-            taglineVariant === "bold" && styles.headerBold,
-          ]}
-        >
+
+        {/* ── Header ─────────────────────────────────────────────────────── */}
+        <View style={styles.header}>
           <View style={styles.versionBadge}>
             <Text style={styles.versionBadgeText}>
               v{Constants.expoConfig?.version ?? "—"}
-              {otaStatus === "available" || otaStatus === "ready"
-                ? " ✦ NEW"
-                : ""}
+              {otaStatus === "available" || otaStatus === "ready" ? " ✦" : ""}
             </Text>
           </View>
+
+          {/* Amber accent: first use of the warm token */}
+          <View style={styles.logoAccent} />
+
           <Text
             style={[styles.logo, taglineVariant === "bold" && styles.logoBold]}
           >
@@ -61,40 +64,49 @@ export default function HomeScreen({ onNavigate }: Props) {
             ]}
           >
             {taglineVariant === "bold"
-              ? "YOUR SOUND. YOUR WORLD."
+              ? "your sound. your world."
               : "feel the music"}
           </Text>
-          <Text style={styles.variantBadge}>
-            {taglineVariant === "bold"
-              ? "🅱 bold variant"
-              : "🅰 control variant"}
+
+          {/* Variant marker: nearly invisible, for test instrumentation only */}
+          <Text style={styles.variantMarker}>
+            {taglineVariant === "bold" ? "b" : "a"}
           </Text>
         </View>
 
+        {/* ── Navigation cards ────────────────────────────────────────────── */}
         <View style={styles.cards}>
           <TouchableOpacity
-            style={styles.card}
+            style={styles.cardPrimary}
             onPress={() => onNavigate?.("discover")}
             testID="discover-card"
+            activeOpacity={0.85}
           >
-            <Text style={styles.cardTitle}>Discover</Text>
-            <Text style={styles.cardSubtitle}>Find new sounds</Text>
+            <Text style={styles.cardDecor}>01</Text>
+            <View style={styles.cardBody}>
+              <Text style={styles.cardTitle}>Discover</Text>
+              <Text style={styles.cardSubtitle}>Find new sounds</Text>
+            </View>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.card, styles.cardAccent]}
+            style={styles.cardSecondary}
             onPress={() => onNavigate?.("library")}
             testID="library-card"
+            activeOpacity={0.85}
           >
-            <Text style={styles.cardTitle}>Library</Text>
-            <Text style={styles.cardSubtitle}>Your collection</Text>
+            <Text style={styles.cardDecor}>02</Text>
+            <View style={styles.cardBody}>
+              <Text style={styles.cardTitle}>Library</Text>
+              <Text style={styles.cardSubtitle}>Your collection</Text>
+            </View>
           </TouchableOpacity>
         </View>
 
-        {/* Feature flag — enable "new_onboarding" in the admin to reveal */}
+        {/* ── Feature flag: new onboarding ────────────────────────────────── */}
         {showNewOnboarding && (
           <View style={styles.onboardingBanner} testID="new-onboarding">
-            <Text style={styles.onboardingTitle}>✨ New Experience</Text>
+            <Text style={styles.onboardingTitle}>New Experience</Text>
             <Text style={styles.onboardingText}>
               We&apos;ve redesigned your onboarding. Tap to explore the new
               flow.
@@ -102,19 +114,19 @@ export default function HomeScreen({ onNavigate }: Props) {
           </View>
         )}
 
-        {/* Kill switch banner — appears instantly via WebSocket when activated */}
+        {/* ── Kill switch banner ───────────────────────────────────────────── */}
         {checkoutKilled && (
           <View style={styles.killBanner} testID="kill-banner">
             <Text style={styles.killBannerText}>
-              🚫 Checkout is temporarily unavailable. We&apos;re working on it.
+              Checkout is temporarily unavailable. We&apos;re working on it.
             </Text>
           </View>
         )}
 
-        {/* Feature flag — enable "new_releases" in the admin to reveal */}
+        {/* ── Feature flag: new releases ───────────────────────────────────── */}
         {showNewReleases && (
           <View style={styles.newSection} testID="new-releases">
-            <Text style={styles.newSectionLabel}>NEW</Text>
+            <Text style={styles.newSectionLabel}>New</Text>
             <Text style={styles.sectionTitle}>New Releases</Text>
             {NEW_RELEASES.map((track) => (
               <TrackRow key={track.id} track={track} />
@@ -122,6 +134,7 @@ export default function HomeScreen({ onNavigate }: Props) {
           </View>
         )}
 
+        {/* ── Recently played ──────────────────────────────────────────────── */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Recently Played</Text>
           {RECENT_TRACKS.map((track) => (
@@ -129,16 +142,20 @@ export default function HomeScreen({ onNavigate }: Props) {
           ))}
         </View>
 
+        {/* ── API config row ───────────────────────────────────────────────── */}
         <View style={styles.configRow} testID="config-api-url">
           <Text style={styles.configLabel}>API</Text>
           <Text style={styles.configValue} numberOfLines={1}>
             {apiUrl}
           </Text>
         </View>
+
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+// ── Sub-components ──────────────────────────────────────────────────────────
 
 interface Track {
   id: string;
@@ -150,7 +167,7 @@ interface Track {
 function TrackRow({ track }: { track: Track }) {
   return (
     <View style={styles.trackRow} testID={`track-${track.id}`}>
-      <View style={styles.trackThumb} />
+      <View style={[styles.trackThumb, { backgroundColor: thumbBg(track.id) }]} />
       <View style={styles.trackInfo}>
         <Text style={styles.trackTitle}>{track.title}</Text>
         <Text style={styles.trackArtist}>{track.artist}</Text>
@@ -160,17 +177,21 @@ function TrackRow({ track }: { track: Track }) {
   );
 }
 
+// ── Data ────────────────────────────────────────────────────────────────────
+
 const NEW_RELEASES: Track[] = [
-  { id: "n1", title: "Solar Flare", artist: "Drift Engine", duration: "3:55" },
-  { id: "n2", title: "Midnight Grid", artist: "SYNTH//", duration: "4:02" },
+  { id: "n1", title: "Solar Flare",   artist: "Drift Engine", duration: "3:55" },
+  { id: "n2", title: "Midnight Grid", artist: "SYNTH//",      duration: "4:02" },
 ];
 
 const RECENT_TRACKS: Track[] = [
-  { id: "1", title: "Neon Drift", artist: "Axel Nova", duration: "3:42" },
-  { id: "2", title: "Blue Static", artist: "LNDN", duration: "2:58" },
-  { id: "3", title: "Ultraviolet", artist: "Prism", duration: "4:11" },
-  { id: "4", title: "Signal Fade", artist: "Celeste", duration: "3:15" },
+  { id: "1", title: "Neon Drift",  artist: "Axel Nova", duration: "3:42" },
+  { id: "2", title: "Blue Static", artist: "LNDN",      duration: "2:58" },
+  { id: "3", title: "Ultraviolet", artist: "Prism",     duration: "4:11" },
+  { id: "4", title: "Signal Fade", artist: "Celeste",   duration: "3:15" },
 ];
+
+// ── Styles ──────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: {
@@ -178,42 +199,17 @@ const styles = StyleSheet.create({
     backgroundColor: "#0a0a0f",
   },
   content: {
-    padding: 20,
-    gap: 24,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 40,
+    gap: 32,
   },
+
+  // Header
   header: {
-    paddingTop: 12,
-    paddingBottom: 16,
-    paddingHorizontal: 16,
-    gap: 4,
-    borderRadius: 16,
-    backgroundColor: "#0d0d14",
-  },
-  headerBold: {
-    backgroundColor: "#0f1f3d",
-    borderWidth: 1,
-    borderColor: "#3b82f6",
-  },
-  logo: {
-    fontSize: 32,
-    fontWeight: "800",
-    color: "#ffffff",
-    letterSpacing: -1,
-  },
-  logoBold: {
-    color: "#60a5fa",
-    fontSize: 36,
-  },
-  tagline: {
-    fontSize: 14,
-    color: "#6b7280",
-    letterSpacing: 1,
-    textTransform: "uppercase",
-  },
-  taglineBold: {
-    color: "#93c5fd",
-    fontSize: 16,
-    fontWeight: "700",
+    paddingTop: 16,
+    paddingBottom: 8,
+    paddingHorizontal: 4,
   },
   versionBadge: {
     alignSelf: "flex-start",
@@ -221,7 +217,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 2,
-    marginBottom: 6,
+    marginBottom: 20,
   },
   versionBadgeText: {
     fontSize: 10,
@@ -229,55 +225,149 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     letterSpacing: 1,
   },
-  variantBadge: {
-    fontSize: 10,
-    color: "#4b5563",
-    marginTop: 4,
+  logoAccent: {
+    width: 28,
+    height: 3,
+    backgroundColor: "#c07828",
+    borderRadius: 2,
+    marginBottom: 12,
   },
+  logo: {
+    fontSize: 52,
+    fontWeight: "800",
+    color: "#f0f0f8",
+    letterSpacing: -2,
+    lineHeight: 54,
+  },
+  logoBold: {
+    color: "#60a5fa",
+    fontSize: 58,
+    letterSpacing: -2.5,
+  },
+  tagline: {
+    fontSize: 11,
+    color: "#4b5563",
+    letterSpacing: 2.5,
+    textTransform: "uppercase",
+    marginTop: 8,
+  },
+  taglineBold: {
+    color: "#6b7280",
+    fontWeight: "500",
+    letterSpacing: 2,
+  },
+  variantMarker: {
+    fontSize: 9,
+    color: "#18181e",
+    marginTop: 6,
+  },
+
+  // Navigation cards: asymmetric 1.65 / 1 split, breaks the identical grid
   cards: {
     flexDirection: "row",
-    gap: 12,
+    gap: 10,
+    alignItems: "stretch",
   },
-  card: {
-    flex: 1,
+  cardPrimary: {
+    flex: 1.65,
     backgroundColor: "#1a1a2e",
     borderRadius: 16,
     padding: 20,
-    gap: 4,
+    paddingBottom: 28,
+    overflow: "hidden",
   },
-  cardAccent: {
+  cardSecondary: {
+    flex: 1,
     backgroundColor: "#1e1b4b",
+    borderRadius: 16,
+    padding: 20,
+    paddingBottom: 28,
+    overflow: "hidden",
+  },
+  cardDecor: {
+    fontSize: 32,
+    fontWeight: "800",
+    color: "#ffffff0a",
+    letterSpacing: -1,
+    lineHeight: 32,
+    marginBottom: 12,
+  },
+  cardBody: {
+    gap: 3,
   },
   cardTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#ffffff",
+    color: "#f0f0f8",
   },
   cardSubtitle: {
-    fontSize: 13,
-    color: "#9ca3af",
+    fontSize: 12,
+    color: "#6b7280",
   },
-  configRow: {
+
+  // Section headers recede so track titles carry the hierarchy
+  section: {
+    gap: 0,
+  },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#4b5563",
+    textTransform: "uppercase",
+    letterSpacing: 1.5,
+    marginBottom: 12,
+  },
+
+  // Track rows: containerless, vertical rhythm only
+  trackRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: "#1f2937",
+    gap: 12,
+    paddingVertical: 9,
   },
-  configLabel: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#3b82f6",
-    letterSpacing: 1,
-    textTransform: "uppercase",
+  trackThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
   },
-  configValue: {
+  trackInfo: {
     flex: 1,
-    fontSize: 11,
-    color: "#4b5563",
-    fontFamily: "monospace",
+    gap: 3,
   },
+  trackTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#f0f0f8",
+  },
+  trackArtist: {
+    fontSize: 12,
+    fontWeight: "400",
+    color: "#4b5563",
+  },
+  trackDuration: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#374151",
+  },
+
+  // New releases: editorial surface
+  newSection: {
+    gap: 0,
+    borderRadius: 16,
+    backgroundColor: "#0d0d14",
+    padding: 20,
+    paddingTop: 16,
+  },
+  newSectionLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#c07828",
+    letterSpacing: 2,
+    textTransform: "uppercase",
+    marginBottom: 4,
+  },
+
+  // Status banners: full-perimeter borders, never side-stripe
   onboardingBanner: {
     backgroundColor: "#1a2744",
     borderRadius: 12,
@@ -287,50 +377,14 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   onboardingTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
     color: "#93c5fd",
   },
   onboardingText: {
     fontSize: 13,
     color: "#cbd5e1",
-  },
-  section: {
-    gap: 12,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#ffffff",
-  },
-  trackRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingVertical: 8,
-  },
-  trackThumb: {
-    width: 44,
-    height: 44,
-    borderRadius: 8,
-    backgroundColor: "#1f2937",
-  },
-  trackInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  trackTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#ffffff",
-  },
-  trackArtist: {
-    fontSize: 12,
-    color: "#6b7280",
-  },
-  trackDuration: {
-    fontSize: 12,
-    color: "#4b5563",
+    lineHeight: 19,
   },
   killBanner: {
     backgroundColor: "#7f1d1d",
@@ -343,20 +397,29 @@ const styles = StyleSheet.create({
     color: "#fca5a5",
     fontSize: 13,
     fontWeight: "500",
+    lineHeight: 19,
   },
-  newSection: {
-    gap: 12,
-    borderRadius: 16,
-    backgroundColor: "#0f172a",
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#1e3a5f",
+
+  // Config row: technical metadata, fully receded
+  configRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#141420",
   },
-  newSectionLabel: {
+  configLabel: {
     fontSize: 10,
-    fontWeight: "800",
-    color: "#3b82f6",
-    letterSpacing: 2,
+    fontWeight: "700",
+    color: "#374151",
+    letterSpacing: 1,
     textTransform: "uppercase",
+  },
+  configValue: {
+    flex: 1,
+    fontSize: 11,
+    color: "#374151",
+    fontFamily: "monospace",
   },
 });

@@ -1,0 +1,153 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-05-12T00:00:00.000Z",
+  "title": "Design System: rumik",
+  "extensions": {
+    "colorMeta": {
+      "void-ash":               { "role": "neutral",   "displayName": "Void Ash",              "canonical": "oklch(5% 0.008 280)",  "tonalRamp": ["#0a0a0f","#141420","#1e1e32","#2a2a48","#393960","#555578","#8484a4","#c0c0d4"] },
+      "deep-listening-surface": { "role": "neutral",   "displayName": "Deep Listening Surface", "canonical": "oklch(7% 0.01 280)",   "tonalRamp": ["#0d0d14","#181826","#22223a","#30304e","#424264","#606082","#9090ae","#c8c8da"] },
+      "evening-card":           { "role": "neutral",   "displayName": "Evening Card",           "canonical": "oklch(12% 0.04 270)",  "tonalRamp": ["#1a1a2e","#252540","#303054","#3e3e68","#545480","#70709a","#9898b8","#ccccd8"] },
+      "midnight-card":          { "role": "neutral",   "displayName": "Midnight Card",          "canonical": "oklch(14% 0.06 280)",  "tonalRamp": ["#1e1b4b","#28255e","#333072","#403c88","#56529e","#7470b4","#a0a0cc","#d0d0e4"] },
+      "night-cave":             { "role": "neutral",   "displayName": "Night Cave",             "canonical": "oklch(9% 0.04 255)",   "tonalRamp": ["#0f172a","#1a2438","#253348","#33435c","#445574","#5e7292","#8898b0","#c0cad8"] },
+      "violet-signal":          { "role": "primary",   "displayName": "Violet Signal",          "canonical": "oklch(50% 0.28 298)",  "tonalRamp": ["#3b0764","#5b21b6","#7c3aed","#8b5cf6","#a78bfa","#c4b5fd","#ddd6fe","#ede9fe"] },
+      "electric-blue":          { "role": "secondary", "displayName": "Electric Blue",          "canonical": "oklch(60% 0.22 264)",  "tonalRamp": ["#1e3a6e","#2563a8","#3b82f6","#60a5fa","#93c5fd","#bfdbfe","#dbeafe","#eff6ff"] },
+      "indigo-action":          { "role": "primary",   "displayName": "Indigo Action",          "canonical": "oklch(58% 0.22 280)",  "tonalRamp": ["#312e81","#4338ca","#6366f1","#818cf8","#a5b4fc","#c7d2fe","#e0e7ff","#eef2ff"] },
+      "slate-secondary":        { "role": "neutral",   "displayName": "Slate Secondary",        "canonical": "oklch(44% 0.02 264)",  "tonalRamp": ["#1f2937","#374151","#4b5563","#6b7280","#9ca3af","#d1d5db","#e5e7eb","#f9fafb"] },
+      "crimson-alert":          { "role": "tertiary",  "displayName": "Crimson Alert",          "canonical": "oklch(20% 0.12 25)",   "tonalRamp": ["#450a0a","#7f1d1d","#991b1b","#b91c1c","#dc2626","#ef4444","#fca5a5","#fee2e2"] },
+      "amber-emerging":         { "role": "secondary", "displayName": "Amber (Emerging)",       "canonical": "oklch(68% 0.14 60)",   "tonalRamp": ["#78350f","#92400e","#b45309","#d97706","#f59e0b","#fbbf24","#fcd34d","#fef3c7"] }
+    },
+    "typographyMeta": {
+      "display":  { "displayName": "Display",        "purpose": "Wordmark and primary hero text. Used once per major screen." },
+      "headline": { "displayName": "Headline",       "purpose": "Card primary labels and section anchors." },
+      "title":    { "displayName": "Title",          "purpose": "Section headings. One step below headline." },
+      "body":     { "displayName": "Body",           "purpose": "Track titles and primary list content." },
+      "label":    { "displayName": "Label",          "purpose": "Version badges, section markers (NEW, API). Uppercase, heavy." },
+      "mono":     { "displayName": "Mono",           "purpose": "API URLs and technical metadata." }
+    },
+    "shadows": [
+      { "name": "accent-glow", "value": "0 8px 32px rgba(99, 102, 241, 0.15)", "purpose": "Future: ambient glow for now-playing cards or elevated bottom sheets. Tinted toward indigo-action, never neutral grey." }
+    ],
+    "motion": [
+      { "name": "press-scale",     "value": "transform: scale(0.97)",              "purpose": "On-press state for all interactive elements. 100ms, ease-out-expo." },
+      { "name": "ease-out-expo",   "value": "cubic-bezier(0.16, 1, 0.3, 1)",       "purpose": "Standard easing for all state transitions. No bounce, no elastic." },
+      { "name": "duration-press",  "value": "100ms",                               "purpose": "Press interaction feedback duration." },
+      { "name": "duration-state",  "value": "200ms",                               "purpose": "Standard state transition duration (color shifts, opacity changes)." }
+    ],
+    "breakpoints": []
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one interactive element a user can press. Indigo background, white text, tactile press response.",
+      "html": "<button class=\"ds-btn-primary\">Download</button>",
+      "css": ".ds-btn-primary { background: #6366f1; color: #ffffff; padding: 7px 14px; font-size: 13px; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; transition: background 200ms cubic-bezier(0.16,1,0.3,1), transform 100ms cubic-bezier(0.16,1,0.3,1); } .ds-btn-primary:hover { background: #3b82f6; } .ds-btn-primary:active { transform: scale(0.97); } .ds-btn-primary:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }"
+    },
+    {
+      "name": "Version Badge",
+      "kind": "chip",
+      "refersTo": "badge-version",
+      "description": "Identity punctuation. Violet Signal on dark. Used for version number and brand moments.",
+      "html": "<span class=\"ds-badge-version\">v0.3.0 \u2746 NEW</span>",
+      "css": ".ds-badge-version { display: inline-block; background: #7c3aed; color: #ffffff; font-size: 10px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; border-radius: 6px; padding: 2px 8px; line-height: 1.2; }"
+    },
+    {
+      "name": "Section Label",
+      "kind": "chip",
+      "refersTo": null,
+      "description": "Zone marker. Electric blue, uppercase, no background. Identifies a content zone, not a heading.",
+      "html": "<span class=\"ds-section-label\">NEW</span>",
+      "css": ".ds-section-label { display: inline-block; color: #3b82f6; font-size: 10px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; line-height: 1.2; background: none; border: none; padding: 0; }"
+    },
+    {
+      "name": "Default Card",
+      "kind": "card",
+      "refersTo": "card-default",
+      "description": "Navigation card. Evening Card background, generous padding, no border or shadow. Tactile on press.",
+      "html": "<div class=\"ds-card-default\"><p class=\"ds-card-title\">Discover</p><p class=\"ds-card-sub\">Find new sounds</p></div>",
+      "css": ".ds-card-default { background: #1a1a2e; border-radius: 16px; padding: 20px; cursor: pointer; transition: transform 100ms cubic-bezier(0.16,1,0.3,1); } .ds-card-default:active { transform: scale(0.97); } .ds-card-title { color: #ffffff; font-size: 18px; font-weight: 700; margin: 0 0 4px 0; line-height: 1.2; } .ds-card-sub { color: #9ca3af; font-size: 13px; margin: 0; line-height: 1.4; }"
+    },
+    {
+      "name": "Accent Card",
+      "kind": "card",
+      "refersTo": "card-accent",
+      "description": "Editorial/featured card. Midnight Card background signals distinct context from default card.",
+      "html": "<div class=\"ds-card-accent\"><p class=\"ds-card-title\">Library</p><p class=\"ds-card-sub\">Your collection</p></div>",
+      "css": ".ds-card-accent { background: #1e1b4b; border-radius: 16px; padding: 20px; cursor: pointer; transition: transform 100ms cubic-bezier(0.16,1,0.3,1); } .ds-card-accent:active { transform: scale(0.97); } .ds-card-accent .ds-card-title { color: #ffffff; font-size: 18px; font-weight: 700; margin: 0 0 4px 0; line-height: 1.2; } .ds-card-accent .ds-card-sub { color: #9ca3af; font-size: 13px; margin: 0; line-height: 1.4; }"
+    },
+    {
+      "name": "Track Row",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Containerless list item. Lives directly on its host surface. Blank space between rows is the separator.",
+      "html": "<div class=\"ds-track-row\"><div class=\"ds-track-thumb\"></div><div class=\"ds-track-info\"><p class=\"ds-track-title\">Neon Drift</p><p class=\"ds-track-artist\">Axel Nova</p></div><span class=\"ds-track-dur\">3:42</span></div>",
+      "css": ".ds-track-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; } .ds-track-thumb { width: 44px; height: 44px; border-radius: 8px; background: #1f2937; flex-shrink: 0; } .ds-track-info { flex: 1; display: flex; flex-direction: column; gap: 2px; } .ds-track-title { color: #ffffff; font-size: 14px; font-weight: 600; margin: 0; } .ds-track-artist { color: #6b7280; font-size: 12px; margin: 0; } .ds-track-dur { color: #4b5563; font-size: 12px; flex-shrink: 0; }"
+    },
+    {
+      "name": "Kill Switch Banner",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Three-layer crimson system (bg / border / text) signals immediate system state. Full-perimeter border, never a side stripe.",
+      "html": "<div class=\"ds-banner-kill\">\uD83D\uDEAB Checkout is temporarily unavailable. We're working on it.</div>",
+      "css": ".ds-banner-kill { background: #7f1d1d; border: 1px solid #ef4444; border-radius: 12px; padding: 14px 16px; color: #fca5a5; font-size: 13px; font-weight: 500; line-height: 1.4; }"
+    },
+    {
+      "name": "Informational Banner",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Feature flag / onboarding banner. Electric Blue full-perimeter border, mist blue title.",
+      "html": "<div class=\"ds-banner-info\"><p class=\"ds-banner-title\">\u2728 New Experience</p><p class=\"ds-banner-body\">We've redesigned your onboarding. Tap to explore.</p></div>",
+      "css": ".ds-banner-info { background: #1a2744; border: 1px solid #3b82f6; border-radius: 12px; padding: 16px; } .ds-banner-title { color: #93c5fd; font-size: 14px; font-weight: 700; margin: 0 0 4px 0; } .ds-banner-body { color: #cbd5e1; font-size: 13px; margin: 0; line-height: 1.4; }"
+    },
+    {
+      "name": "Update Banner (Floating)",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Fixed bottom floating banner for OTA update state. The only floating interactive element in the current system.",
+      "html": "<div class=\"ds-update-banner\"><span class=\"ds-update-label\">Update available</span><button class=\"ds-update-btn\">Download</button></div>",
+      "css": ".ds-update-banner { background: #1e1b4b; border-radius: 12px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; } .ds-update-label { color: #e0e7ff; font-size: 14px; flex: 1; } .ds-update-btn { background: #6366f1; color: #fff; padding: 7px 14px; font-size: 13px; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: background 200ms cubic-bezier(0.16,1,0.3,1), transform 100ms cubic-bezier(0.16,1,0.3,1); } .ds-update-btn:hover { background: #3b82f6; } .ds-update-btn:active { transform: scale(0.97); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Late Listening Session",
+    "overview": "rumik is the room you sit in while the music plays. The interface exists to frame the audio, not perform alongside it. Every surface decision traces back to one physical scene: someone at midnight, headphones on, eyes adjusted to near-darkness, fully inside a record.\n\nThe darkness here is not the default dark of developer tools or crypto dashboards. It has weight. The near-blacks carry a faint violet cast. Surfaces layer tonally, growing slightly lighter as they come forward, like objects emerging from shadow.\n\nThe system explicitly rejects the cold clinical dark of IDE themes, the aggressive green of mass-market streaming, and any surface that mistakes dark mode for a design decision.",
+    "keyCharacteristics": [
+      "Sparse density: breathing room is a design decision, not an afterthought",
+      "Tonal depth: no shadows; surfaces layer through background value",
+      "Weight-driven hierarchy: type scale uses weight contrast as much as size contrast",
+      "Tactile interactions: light scale on press confirms without performing",
+      "Evolving warmth: amber accent incoming; until then, warmth lives in restraint"
+    ],
+    "rules": [
+      { "name": "The Signal Rule",          "body": "Electric Blue (#3b82f6) appears on at most 10% of any screen. It is a signal, not a wash.", "section": "colors" },
+      { "name": "The Ink Rule",             "body": "Near-blacks must carry hue. #0a0a0f is the floor. Never pure black.", "section": "colors" },
+      { "name": "The Warm Debt Rule",       "body": "Every new surface should ask: does this need the amber note? Resist filling that role with more blue.", "section": "colors" },
+      { "name": "The Weight Ladder Rule",   "body": "Every text element must be at least one weight step away from its neighbors. Adjacent 600 and 700 at similar sizes are not permitted.", "section": "typography" },
+      { "name": "The Label Cap Rule",       "body": "Labels (10px, UPPERCASE) are markers, not headings. Never use label style on text that contains a sentence.", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "Surfaces are flat at rest. A shadow on a static card is a lie.", "section": "elevation" },
+      { "name": "The Tonal Staircase Rule", "body": "Each new surface must differ from its parent by at least 5 lightness steps in OKLCH.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do tint every near-black toward violet or amber. #0a0a0f has a cast; preserve it.",
+      "Do use tonal layering for depth. Background value is the elevation system.",
+      "Do use weight extremes for hierarchy. Let weight do the work that size alone cannot.",
+      "Do leave track rows containerless. The blank space between rows is the separator.",
+      "Do use full borders on status banners. Full perimeter or nothing.",
+      "Do express tactile feedback through scale on press (0.97, 100ms, ease-out-expo).",
+      "Do make Electric Blue feel rare. More than three instances on a screen needs an audit.",
+      "Do introduce the amber token on the next new editorial surface."
+    ],
+    "donts": [
+      "Don't use Spotify-green or any mass-market streaming palette reflex.",
+      "Don't use cold grey dark mode. Low-chroma blue-grey backgrounds are prohibited.",
+      "Don't use side-stripe borders (border-left or border-right greater than 1px as a colored accent).",
+      "Don't repeat identical cards in a grid with the same size, padding, and structure.",
+      "Don't use gradient text. Emphasis is weight or size.",
+      "Don't add drop shadows to static surfaces. The tonal staircase handles all depth.",
+      "Don't wrap track rows in cards. Nested cards are always wrong.",
+      "Don't introduce a new surface without asking: does it need the amber note?",
+      "Don't use the hero-metric template (big number, small label, gradient accent)."
+    ]
+  }
+}
