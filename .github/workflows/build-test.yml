@@ -141,34 +141,23 @@ jobs:
         run: npx playwright install-deps chromium
         if: steps.playwright-cache.outputs.cache-hit == 'true'
 
-      - name: Get Vercel preview URL
-        id: vercel
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download web dist
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist-${{ github.sha }}
+          path: dist/
+
+      - name: Run E2E tests (Xvfb headed mode — fixes RN Web blank page in headless)
         run: |
-          # Vercel creates GitHub Deployments with environment_url in statuses.
-          # Poll until we find one for this commit (max 3 min).
-          for i in $(seq 1 18); do
-            DEP_ID=$(gh api "/repos/${{ github.repository }}/deployments?sha=${{ github.sha }}&per_page=20"               --jq '[.[] | select(.environment | ascii_downcase | test("preview"))] | .[0].id // ""' 2>/dev/null || echo "")
-            if [ -n "$DEP_ID" ] && [ "$DEP_ID" != "null" ]; then
-              ENV_URL=$(gh api "/repos/${{ github.repository }}/deployments/$DEP_ID/statuses?per_page=1"                 --jq '.[0].environment_url // ""' 2>/dev/null || echo "")
-              if [ -n "$ENV_URL" ] && [ "$ENV_URL" != "null" ]; then
-                echo "url=$ENV_URL" >> $GITHUB_OUTPUT
-                echo "Vercel preview: $ENV_URL"
-                break
-              fi
-            fi
-            echo "Waiting for Vercel deployment ($i/18)..."
-            sleep 10
-          done
-          if [ -z "$ENV_URL" ] || [ "$ENV_URL" = "null" ]; then
-            echo "::error::Could not find Vercel preview URL after 3 minutes"
-            exit 1
-          fi
-      - name: Run E2E tests against Vercel preview
-        run: npx playwright test --project=chromium
+          # Start virtual display so Chromium renders React Native Web correctly
+          sudo apt-get install -y xvfb
+          Xvfb :99 -screen 0 1920x1080x24 &
+          export DISPLAY=:99
+          npx serve dist -p 3000 &
+          npx wait-on http://localhost:3000 --timeout 30000
+          DISPLAY=:99 npx playwright test --project=chromium
         env:
-          BASE_URL: ${{ steps.vercel.outputs.url }}
+          BASE_URL: http://localhost:3000
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
@@ -195,32 +184,14 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Get Vercel preview URL
-        id: vercel
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Vercel creates GitHub Deployments with environment_url in statuses.
-          # Poll until we find one for this commit (max 3 min).
-          for i in $(seq 1 18); do
-            DEP_ID=$(gh api "/repos/${{ github.repository }}/deployments?sha=${{ github.sha }}&per_page=20"               --jq '[.[] | select(.environment | ascii_downcase | test("preview"))] | .[0].id // ""' 2>/dev/null || echo "")
-            if [ -n "$DEP_ID" ] && [ "$DEP_ID" != "null" ]; then
-              ENV_URL=$(gh api "/repos/${{ github.repository }}/deployments/$DEP_ID/statuses?per_page=1"                 --jq '.[0].environment_url // ""' 2>/dev/null || echo "")
-              if [ -n "$ENV_URL" ] && [ "$ENV_URL" != "null" ]; then
-                echo "url=$ENV_URL" >> $GITHUB_OUTPUT
-                echo "Vercel preview: $ENV_URL"
-                break
-              fi
-            fi
-            echo "Waiting for Vercel deployment ($i/18)..."
-            sleep 10
-          done
-          if [ -z "$ENV_URL" ] || [ "$ENV_URL" = "null" ]; then
-            echo "::error::Could not find Vercel preview URL after 3 minutes"
-            exit 1
-          fi
-      - name: Run Lighthouse CI against Vercel preview
-        run: pnpm dlx @lhci/cli autorun --collect.url=${{ steps.vercel.outputs.url }}
+      - name: Download web dist
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist-${{ github.sha }}
+          path: dist/
+
+      - name: Run Lighthouse CI
+        run: pnpm dlx @lhci/cli autorun
         env:
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
 
