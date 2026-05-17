@@ -48,6 +48,7 @@ db.exec(`
     channel     TEXT,
     recorded_at TEXT NOT NULL
   );
+  CREATE INDEX IF NOT EXISTS idx_crash_rates_lookup ON crash_rates(version, channel, recorded_at DESC);
 
   CREATE TABLE IF NOT EXISTS feature_flags (
     id          TEXT PRIMARY KEY,
@@ -150,6 +151,7 @@ db.exec(`
     cooldown_mins INTEGER DEFAULT 30,
     enabled       INTEGER DEFAULT 1,
     webhook_url   TEXT NOT NULL,
+    notifier_type TEXT NOT NULL DEFAULT 'webhook',
     created_at    TEXT NOT NULL,
     updated_at    TEXT NOT NULL
   );
@@ -205,6 +207,13 @@ const cols = (db.prepare("PRAGMA table_info(releases)").all() as Array<{ name: s
   .map(c => c.name);
 if (!cols.includes('rollout_advanced_at')) {
   db.exec('ALTER TABLE releases ADD COLUMN rollout_advanced_at TEXT');
+}
+
+// Migration: add notifier_type to alert_rules if missing
+const alertCols = (db.prepare("PRAGMA table_info(alert_rules)").all() as Array<{ name: string }>)
+  .map(c => c.name);
+if (!alertCols.includes('notifier_type')) {
+  db.exec("ALTER TABLE alert_rules ADD COLUMN notifier_type TEXT NOT NULL DEFAULT 'webhook'");
 }
 
 export default db;

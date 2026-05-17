@@ -3,11 +3,8 @@
 
 // ── API ──────────────────────────────────────────────────────────────────────
 
-const API_KEY = (() => {
-  const stored = localStorage.getItem('admin_api_key');
-  return stored ?? prompt('Enter admin API key:') ?? '';
-})();
-localStorage.setItem('admin_api_key', API_KEY);
+const API_KEY = localStorage.getItem('admin_api_key') ?? '';
+if (!API_KEY) { window.location.href = '/admin/login.html'; }
 
 async function api(method, path, body) {
   const res = await fetch(`/api${path}`, {

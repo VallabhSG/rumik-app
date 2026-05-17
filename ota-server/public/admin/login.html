@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>rumik — Admin Login</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .login-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 70vh;
+    }
+    .login-card {
+      background: var(--surface, #1a1a1a);
+      border: 1px solid var(--border, #333);
+      border-radius: 12px;
+      padding: 40px 48px;
+      width: 360px;
+      max-width: 95vw;
+    }
+    .login-card h2 { margin: 0 0 24px; font-size: 1.1rem; color: var(--text, #fff); }
+    .login-card input[type=password] {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid var(--border, #444);
+      border-radius: 8px;
+      background: var(--bg, #111);
+      color: var(--text, #fff);
+      font-size: 0.95rem;
+      box-sizing: border-box;
+      margin-bottom: 16px;
+    }
+    .login-card .btn { width: 100%; }
+    .error-msg { color: #f87171; font-size: 0.85rem; margin-top: 8px; display: none; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>rumik</h1>
+  <span class="badge">Admin</span>
+</header>
+<main>
+  <div class="login-wrap">
+    <div class="login-card">
+      <h2>Sign in to Admin</h2>
+      <input type="password" id="password" placeholder="API key / password" autofocus>
+      <button class="btn btn-primary" id="btn-login">Sign in</button>
+      <p class="error-msg" id="error-msg">Invalid password. Please try again.</p>
+    </div>
+  </div>
+</main>
+<script>
+  document.getElementById('btn-login').addEventListener('click', async () => {
+    const password = document.getElementById('password').value;
+    const errEl = document.getElementById('error-msg');
+    errEl.style.display = 'none';
+    try {
+      const res = await fetch('/admin/session/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      if (res.ok) {
+        localStorage.setItem('admin_api_key', password);
+        window.location.href = '/admin/';
+      } else {
+        errEl.style.display = 'block';
+      }
+    } catch {
+      errEl.style.display = 'block';
+    }
+  });
+  document.getElementById('password').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('btn-login').click();
+  });
+</script>
+</body>
+</html>
