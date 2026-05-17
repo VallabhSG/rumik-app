@@ -3,7 +3,9 @@ import { test, expect } from '@playwright/test';
 test.describe('Home Screen @smoke', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('domcontentloaded');
+    // Wait for the React SPA to fully hydrate — domcontentloaded is too early
+    // for JS-rendered apps; networkidle ensures all async work has settled.
+    await page.waitForLoadState('networkidle');
   });
 
   test('loads and shows rumik branding', async ({ page }) => {
