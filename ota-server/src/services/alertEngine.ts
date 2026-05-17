@@ -1,5 +1,8 @@
 import { v4 as uuid } from 'uuid';
 import db from '../db.js';
+import logger from '../logger.js';
+
+type NotifierType = 'webhook' | 'slack' | 'alertmanager';
 
 interface AlertRule {
   id: string;
@@ -13,6 +16,7 @@ interface AlertRule {
   cooldown_mins: number;
   enabled: number;
   webhook_url: string;
+  notifier_type?: NotifierType;
 }
 
 type Operator = 'gt' | 'lt' | 'gte' | 'lte';
@@ -134,7 +138,7 @@ function isInCooldown(ruleId: string, cooldownMins: number): boolean {
   return !!row;
 }
 
-async function sendWebhook(rule: AlertRule, value: number): Promise<'sent' | 'failed'> {
+function buildSlackPayload(rule: AlertRule, value: number): object {
   const operatorLabel: Record<string, string> = { gt: '>', lt: '<', gte: '≥', lte: '≤' };
   const displayValue = rule.metric.endsWith('_ms')
     ? `${Math.round(value)}ms`
@@ -148,30 +152,59 @@ async function sendWebhook(rule: AlertRule, value: number): Promise<'sent' | 'fa
       ? `${(rule.threshold * 100).toFixed(1)}%`
       : String(rule.threshold);
 
-  const payload = {
+  return {
     text: `\u{1F6A8} Alert: *${rule.name}* triggered`,
     attachments: [{
       color: 'danger',
       fields: [
-        { title: 'Rule',      value: rule.name,                                   short: true },
-        { title: 'Metric',    value: rule.metric,                                 short: true },
-        { title: 'Value',     value: displayValue,                                short: true },
-        { title: 'Threshold', value: `${operatorLabel[rule.operator] ?? rule.operator} ${displayThreshold}`, short: true },
-        { title: 'Channel',   value: rule.channel,                                short: true },
-        { title: 'Version',   value: rule.version ?? 'any',                       short: true },
+        { title: 'Rule',      value: rule.name,                                                                  short: true },
+        { title: 'Metric',    value: rule.metric,                                                               short: true },
+        { title: 'Value',     value: displayValue,                                                              short: true },
+        { title: 'Threshold', value: `${operatorLabel[rule.operator] ?? rule.operator} ${displayThreshold}`,   short: true },
+        { title: 'Channel',   value: rule.channel,                                                             short: true },
+        { title: 'Version',   value: rule.version ?? 'any',                                                    short: true },
       ],
       footer: 'rumik-app OTA',
       ts: Math.floor(Date.now() / 1000),
     }],
   };
+}
 
-  try {
-    const res = await fetch(rule.webhook_url, {
+async function notify(rule: AlertRule, payload: object): Promise<void> {
+  const type = (rule.notifier_type ?? 'webhook') as NotifierType;
+
+  if (type === 'alertmanager') {
+    const amPayload = [{
+      labels: {
+        alertname: rule.name,
+        severity: 'warning',
+        service: 'rumik-ota-server',
+      },
+      annotations: {
+        summary: JSON.stringify(payload),
+      },
+      generatorURL: 'http://rumik-ota-server/admin',
+    }];
+    await fetch(rule.webhook_url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(amPayload),
+    });
+  } else {
+    // Default: POST raw payload (webhook / Slack)
+    await fetch(rule.webhook_url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    return res.ok ? 'sent' : 'failed';
+  }
+}
+
+async function sendWebhook(rule: AlertRule, value: number): Promise<'sent' | 'failed'> {
+  const payload = buildSlackPayload(rule, value);
+  try {
+    await notify(rule, payload);
+    return 'sent';
   } catch {
     return 'failed';
   }
@@ -188,9 +221,9 @@ async function processRule(rule: AlertRule): Promise<void> {
   const status = await sendWebhook(rule, value);
 
   if (status === 'sent') {
-    console.log(`[alertEngine] Fired alert "${rule.name}" — ${rule.metric} = ${value}`);
+    logger.info({ ruleName: rule.name, metric: rule.metric, value }, 'alert fired');
   } else {
-    console.warn(`[alertEngine] Webhook failed for rule "${rule.name}"`);
+    logger.warn({ ruleName: rule.name }, 'alert webhook failed');
   }
 
   db.prepare(`

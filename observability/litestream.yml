@@ -1,0 +1,7 @@
+dbs:
+  - path: /data/ota.db
+    replicas:
+      - type: file
+        path: /data/backups/ota-replica
+        retention: 72h
+        sync-interval: 10s
