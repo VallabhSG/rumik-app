@@ -191,7 +191,10 @@ jobs:
           path: dist/
 
       - name: Run Lighthouse CI
-        run: pnpm dlx @lhci/cli autorun
+        run: |
+          npx serve ./dist -p 3000 --no-clipboard &
+          npx wait-on http://localhost:3000 --timeout 30000
+          pnpm dlx @lhci/cli autorun
         env:
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
 

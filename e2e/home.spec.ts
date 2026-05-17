@@ -2,10 +2,16 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Home Screen @smoke', () => {
   test.beforeEach(async ({ page }) => {
+    // Capture console errors so CI logs show any JS crashes
+    page.on('console', msg => {
+      if (msg.type() === 'error') console.log('[browser error]', msg.text());
+    });
+    page.on('pageerror', err => console.log('[page crash]', err.message));
     await page.goto('/');
-    // Wait for the React SPA to fully hydrate — domcontentloaded is too early
-    // for JS-rendered apps; networkidle ensures all async work has settled.
     await page.waitForLoadState('networkidle');
+    // Debug: log first 300 chars of body text so CI shows what rendered
+    const bodyText = await page.locator('body').innerText().catch(() => '');
+    console.log('[body]', bodyText.substring(0, 300) || '(empty)');
   });
 
   test('loads and shows rumik branding', async ({ page }) => {
