@@ -12,7 +12,9 @@ function buildConfig(): OtaConfig {
     platform: Platform.OS as "ios" | "android",
     nativeVersion: Application.nativeApplicationVersion ?? "1.0.0",
     crashThreshold: Number(process.env.EXPO_PUBLIC_OTA_CRASH_THRESHOLD ?? 0.05),
-    minLaunchesBeforeRollback: Number(process.env.EXPO_PUBLIC_OTA_MIN_LAUNCHES ?? 3),
+    minLaunchesBeforeRollback: Number(
+      process.env.EXPO_PUBLIC_OTA_MIN_LAUNCHES ?? 3,
+    ),
   };
 }
 

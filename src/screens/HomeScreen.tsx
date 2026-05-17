@@ -39,7 +39,6 @@ export default function HomeScreen({ onNavigate }: Props) {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <View style={styles.header}>
           <View style={styles.versionBadge}>
@@ -149,7 +148,6 @@ export default function HomeScreen({ onNavigate }: Props) {
             {apiUrl}
           </Text>
         </View>
-
       </ScrollView>
     </SafeAreaView>
   );
@@ -167,7 +165,9 @@ interface Track {
 function TrackRow({ track }: { track: Track }) {
   return (
     <View style={styles.trackRow} testID={`track-${track.id}`}>
-      <View style={[styles.trackThumb, { backgroundColor: thumbBg(track.id) }]} />
+      <View
+        style={[styles.trackThumb, { backgroundColor: thumbBg(track.id) }]}
+      />
       <View style={styles.trackInfo}>
         <Text style={styles.trackTitle}>{track.title}</Text>
         <Text style={styles.trackArtist}>{track.artist}</Text>
@@ -180,15 +180,15 @@ function TrackRow({ track }: { track: Track }) {
 // ── Data ────────────────────────────────────────────────────────────────────
 
 const NEW_RELEASES: Track[] = [
-  { id: "n1", title: "Solar Flare",   artist: "Drift Engine", duration: "3:55" },
-  { id: "n2", title: "Midnight Grid", artist: "SYNTH//",      duration: "4:02" },
+  { id: "n1", title: "Solar Flare", artist: "Drift Engine", duration: "3:55" },
+  { id: "n2", title: "Midnight Grid", artist: "SYNTH//", duration: "4:02" },
 ];
 
 const RECENT_TRACKS: Track[] = [
-  { id: "1", title: "Neon Drift",  artist: "Axel Nova", duration: "3:42" },
-  { id: "2", title: "Blue Static", artist: "LNDN",      duration: "2:58" },
-  { id: "3", title: "Ultraviolet", artist: "Prism",     duration: "4:11" },
-  { id: "4", title: "Signal Fade", artist: "Celeste",   duration: "3:15" },
+  { id: "1", title: "Neon Drift", artist: "Axel Nova", duration: "3:42" },
+  { id: "2", title: "Blue Static", artist: "LNDN", duration: "2:58" },
+  { id: "3", title: "Ultraviolet", artist: "Prism", duration: "4:11" },
+  { id: "4", title: "Signal Fade", artist: "Celeste", duration: "3:15" },
 ];
 
 // ── Styles ──────────────────────────────────────────────────────────────────
