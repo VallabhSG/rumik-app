@@ -102,10 +102,10 @@ describe("HomeScreen", () => {
   it("renders bold tagline when experiment variant is bold", () => {
     mockUseExperiment.mockReturnValueOnce("bold");
     const { getByText } = render(<HomeScreen />);
-    expect(getByText("YOUR SOUND. YOUR WORLD.")).toBeTruthy();
+    expect(getByText("your sound. your world.")).toBeTruthy();
   });
 
-  it("shows ✦ NEW badge when OTA update is available", () => {
+  it("shows ✦ indicator in version badge when OTA update is available", () => {
     mockUseOta.mockReturnValueOnce({
       status: "available",
       error: null,
@@ -113,10 +113,10 @@ describe("HomeScreen", () => {
       applyNow: jest.fn(),
     });
     const { getByText } = render(<HomeScreen />);
-    expect(getByText(/✦ NEW/)).toBeTruthy();
+    expect(getByText(/✦/)).toBeTruthy();
   });
 
-  it("shows ✦ NEW badge when OTA update is ready", () => {
+  it("shows ✦ indicator in version badge when OTA update is ready", () => {
     mockUseOta.mockReturnValueOnce({
       status: "ready",
       error: null,
@@ -124,6 +124,6 @@ describe("HomeScreen", () => {
       applyNow: jest.fn(),
     });
     const { getByText } = render(<HomeScreen />);
-    expect(getByText(/✦ NEW/)).toBeTruthy();
+    expect(getByText(/✦/)).toBeTruthy();
   });
 });

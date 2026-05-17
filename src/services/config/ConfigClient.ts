@@ -125,6 +125,11 @@ export class ConfigClient {
     return () => this.listeners.delete(listener);
   }
 
+  /** Set the install ID before initialize() is called. Avoids unsafe private-field mutation from the outside. */
+  setInstallId(id: string): void {
+    this.options.installId = id;
+  }
+
   /** Force a re-fetch from the server. */
   async refresh(): Promise<void> {
     await this.fetchAndUpdate();

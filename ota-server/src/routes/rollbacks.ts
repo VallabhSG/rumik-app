@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
 import db from '../db.js';
+import { logChange, diffObjects } from '../services/audit.js';
+import logger from '../logger.js';
 
 const router = Router();
 
@@ -70,19 +72,22 @@ router.post('/', (req: Request, res: Response) => {
     VALUES (?, ?, ?, ?, ?, ?, 'completed', ?)
   `).run(id, target_version, from_release?.version ?? null, reason, channels, triggered_by, now);
 
-  res.status(201).json({
-    success: true,
-    data: {
-      id,
-      target_version,
-      from_version: from_release?.version ?? null,
-      reason,
-      channels,
-      triggered_by,
-      status: 'completed',
-      created_at: now,
-    },
-  });
+  const responseData = {
+    id,
+    target_version,
+    from_version: from_release?.version ?? null,
+    reason,
+    channels,
+    triggered_by,
+    status: 'completed',
+    created_at: now,
+  };
+  try {
+    logChange('rollback', id, 'created', diffObjects(null, responseData as Record<string, unknown>));
+  } catch (e) {
+    logger.warn({ err: e }, 'Audit log write failed');
+  }
+  res.status(201).json({ success: true, data: responseData });
 });
 
 export default router;

@@ -39,7 +39,8 @@ router.get('/history', (req: Request, res: Response) => {
   const params: unknown[] = [];
 
   if (channel) { query += ' WHERE channel = ?'; params.push(channel); }
-  query += ` ORDER BY recorded_at DESC LIMIT ${Number(limit)}`;
+  query += ' ORDER BY recorded_at DESC LIMIT ?';
+  params.push(Math.min(Math.max(1, Number(limit) || 50), 500));
 
   const rows = db.prepare(query).all(...params);
   res.json({ success: true, data: rows });

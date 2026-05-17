@@ -260,3 +260,50 @@ After any rollback:
 2. Check admin → Monitoring: crash rate trend should start declining within 1–2 hours
 3. Check `GET /api/rollbacks` to confirm entry exists with `status: completed`
 4. Post incident summary to team channel with: affected version, impact window, root cause, resolution
+
+---
+
+## Backup & Recovery
+
+### SQLite (default / dev)
+
+Litestream provides continuous SQLite replication with 72-hour retention.
+
+**Setup:**
+```bash
+# Install Litestream
+curl -L https://github.com/benbjohnson/litestream/releases/latest/download/litestream-linux-amd64.tar.gz | tar xz
+sudo mv litestream /usr/local/bin/
+
+# Run alongside OTA server
+litestream replicate -config observability/litestream.yml &
+node dist/index.js
+```
+
+**Restore from replica:**
+```bash
+litestream restore -config observability/litestream.yml -o data/ota-restored.db /data/ota.db
+```
+
+### PostgreSQL (production)
+
+Use the included backup script or the Docker Compose `pg-backup` service.
+
+**Manual backup:**
+```bash
+DATABASE_URL=postgres://user:pass@host/rumik \
+BACKUP_DIR=./backups \
+bash scripts/backup-pg.sh
+```
+
+**Docker Compose (automatic daily backup):**
+```bash
+docker compose --profile postgres up pg-backup -d
+```
+
+Backups are stored in `/data/backups/pg/` and pruned after `BACKUP_RETENTION_DAYS` days (default: 7).
+
+**Restore from backup:**
+```bash
+pg_restore --dbname=$DATABASE_URL --clean /data/backups/pg/ota_YYYYMMDD_HHMMSS.dump
+```

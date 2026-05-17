@@ -51,9 +51,7 @@ export function RemoteConfigProvider({
     // Resolve the installId before initializing
     getInstallId()
       .then((id) => {
-        (
-          clientRef.current as unknown as { options: ConfigClientOptions }
-        ).options.installId = id;
+        clientRef.current.setInstallId(id);
         return clientRef.current.initialize();
       })
       .catch(() => clientRef.current.initialize());

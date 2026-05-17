@@ -1,6 +1,8 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { IncomingMessage } from 'http';
 import type { Server } from 'http';
+import logger from './logger.js';
+import { getRedis, getRedisSubscriber, KILL_SWITCH_CHANNEL } from './redis.js';
 
 const HEARTBEAT_INTERVAL_MS = Number(process.env.WS_HEARTBEAT_INTERVAL_MS ?? 30_000);
 const MAX_MISSED_PONGS = 2;
@@ -90,5 +92,39 @@ export function broadcast(msg: object): void {
     if (socket._authenticated && socket.readyState === WebSocket.OPEN) {
       socket.send(payload);
     }
+  }
+}
+
+/**
+ * Set up Redis pub/sub subscriber so that kill-switch events published
+ * by any server instance are broadcast to this instance's WS clients.
+ */
+export function setupRedisPubSub(broadcastFn: (msg: object) => void): void {
+  const sub = getRedisSubscriber();
+  if (!sub) return;
+
+  sub.subscribe(KILL_SWITCH_CHANNEL, (err) => {
+    if (err) logger.warn({ err }, 'Redis subscribe failed — using local broadcast only');
+  });
+
+  sub.on('message', (_channel: string, message: string) => {
+    try {
+      const msg = JSON.parse(message) as object;
+      broadcastFn(msg);
+    } catch {
+      // ignore malformed messages
+    }
+  });
+}
+
+/**
+ * Publish a kill-switch event to the Redis channel so all server instances
+ * can broadcast it to their connected WS clients.
+ * Falls back to a no-op when Redis is not configured.
+ */
+export function publishKillSwitch(msg: object): void {
+  const redis = getRedis();
+  if (redis) {
+    redis.publish(KILL_SWITCH_CHANNEL, JSON.stringify(msg)).catch(() => {});
   }
 }

@@ -125,7 +125,7 @@ router.post('/:id/deactivate', (req, res) => {
   const updated = db.prepare('SELECT * FROM kill_switches WHERE id = ?').get(req.params.id) as KillSwitchRow;
   logChange('kill_switch', req.params.id, 'deactivated', null);
 
-  _broadcast?.({ type: 'kill_switch', key: updated.key, active: false, reason: null });
+  _broadcast?.({ type: 'kill_switch', key: updated.key, active: false, reason: updated.reason });
   return res.json({ success: true, data: parseKillSwitch(updated) });
 });
 

@@ -74,6 +74,7 @@ export function createTestDb(): Database.Database {
       threshold REAL NOT NULL, channel TEXT DEFAULT 'production', version TEXT,
       window_mins INTEGER DEFAULT 60, cooldown_mins INTEGER DEFAULT 30,
       enabled INTEGER DEFAULT 1, webhook_url TEXT NOT NULL,
+      notifier_type TEXT NOT NULL DEFAULT 'webhook',
       created_at TEXT NOT NULL, updated_at TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS alert_history (

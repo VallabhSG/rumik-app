@@ -73,3 +73,6 @@ claude.md.txt
 .env.*
 ota-server/.env
 ota-server/.env.*
+
+# Turborepo
+.turbo

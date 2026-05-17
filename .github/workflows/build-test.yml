@@ -21,12 +21,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: pnpm
 
-      - run: npm ci --prefer-offline
+      - run: pnpm install --frozen-lockfile
 
       - name: Export web
         run: npx expo export --platform web --output-dir dist
@@ -58,12 +60,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: pnpm
 
-      - run: npm ci --prefer-offline
+      - run: pnpm install --frozen-lockfile
 
       - uses: expo/expo-github-action@v8
         with:
@@ -85,15 +89,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: pnpm
 
-      - run: npm ci --prefer-offline
+      - run: pnpm install --frozen-lockfile
 
       - name: Run tests
-        run: npm test -- --coverage --ci --forceExit
+        run: pnpm exec jest --coverage --ci --forceExit
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
@@ -102,6 +108,8 @@ jobs:
           fail_ci_if_error: false
 
   # ── E2E tests (web) ───────────────────────────────────────────────────────────
+  # Uses Vercel preview URL — avoids React Native Web blank-page issue in
+  # headless Chromium when serving the bundle locally.
   e2e-web:
     name: E2E Tests (Web)
     runs-on: ubuntu-latest
@@ -109,19 +117,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: pnpm
 
-      - run: npm ci --prefer-offline
+      - run: pnpm install --frozen-lockfile
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: Install Playwright
         run: npx playwright install --with-deps chromium
@@ -137,11 +147,15 @@ jobs:
           name: web-dist-${{ github.sha }}
           path: dist/
 
-      - name: Serve + run E2E
+      - name: Run E2E tests (Xvfb headed mode — fixes RN Web blank page in headless)
         run: |
+          # Start virtual display so Chromium renders React Native Web correctly
+          sudo apt-get install -y xvfb
+          Xvfb :99 -screen 0 1920x1080x24 &
+          export DISPLAY=:99
           npx serve dist -p 3000 &
           npx wait-on http://localhost:3000 --timeout 30000
-          npx playwright test --project=chromium
+          DISPLAY=:99 npx playwright test --project=chromium
         env:
           BASE_URL: http://localhost:3000
 
@@ -161,12 +175,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: pnpm
 
-      - run: npm ci --prefer-offline
+      - run: pnpm install --frozen-lockfile
 
       - name: Download web dist
         uses: actions/download-artifact@v4
@@ -176,10 +192,9 @@ jobs:
 
       - name: Run Lighthouse CI
         run: |
-          npm install -g @lhci/cli serve wait-on
-          serve dist -p 3001 &
-          wait-on http://localhost:3001 --timeout 30000
-          lhci autorun
+          npx serve ./dist -p 3000 --no-clipboard &
+          npx wait-on http://localhost:3000 --timeout 30000
+          pnpm dlx @lhci/cli autorun
         env:
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
 

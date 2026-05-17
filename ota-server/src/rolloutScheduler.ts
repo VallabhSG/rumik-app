@@ -1,5 +1,6 @@
 import db from './db.js';
 import { v4 as uuid } from 'uuid';
+import logger from './logger.js';
 
 /**
  * Rollout stage progression: percentage → minimum hours before advancing.
@@ -18,9 +19,9 @@ const INTERVAL_MS     = Number(process.env.ROLLOUT_SCHEDULER_INTERVAL_MS ?? 30 *
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function nextStage(currentPct: number): { percentage: number; minHoursAtStage: number } | null {
-  const idx = STAGES.findIndex(s => s.percentage === currentPct);
-  if (idx === -1 || idx >= STAGES.length - 1) return null;
-  return STAGES[idx + 1];
+  // Use > rather than exact equality so releases manually set to a
+  // non-standard percentage (e.g. 10%) are not silently skipped forever.
+  return STAGES.find(s => s.percentage > currentPct) ?? null;
 }
 
 function hoursElapsed(since: string): number {
@@ -38,10 +39,20 @@ function latestCrashRate(version: string, channel: string): number {
 
 function recordRollback(releaseId: string, version: string, channel: string, reason: string): void {
   const now = new Date().toISOString();
+
+  // Look up the most recent previously-active release in the same channel to
+  // determine what version clients will fall back to. This is the release
+  // that was active before the current one, i.e. not the paused release itself.
+  const previous = db.prepare(`
+    SELECT version FROM releases
+    WHERE channel = ? AND status = 'active' AND version != ?
+    ORDER BY created_at DESC LIMIT 1
+  `).get(channel, version) as { version: string } | undefined;
+
   db.prepare(`
     INSERT INTO rollbacks (id, target_version, from_version, reason, channels, triggered_by, status, created_at)
     VALUES (?, ?, ?, ?, ?, 'scheduler', 'completed', ?)
-  `).run(uuid(), version, version, reason, channel, now);
+  `).run(uuid(), previous?.version ?? 'unknown', version, reason, channel, now);
 }
 
 // ── Main tick ─────────────────────────────────────────────────────────────────
@@ -74,9 +85,9 @@ function tick(): void {
     // ── Crash-rate guard ─────────────────────────────────────────────────────
     const crashRate = latestCrashRate(release.version, release.channel);
     if (crashRate > CRASH_THRESHOLD) {
-      console.warn(
-        `[scheduler] PAUSING ${release.version} (${release.channel}) — ` +
-        `crash rate ${(crashRate * 100).toFixed(1)}% > ${(CRASH_THRESHOLD * 100).toFixed(0)}% threshold`
+      logger.warn(
+        { version: release.version, channel: release.channel, crashRate, threshold: CRASH_THRESHOLD },
+        'scheduler pausing release — crash rate exceeded threshold',
       );
       db.prepare(`UPDATE releases SET status = 'paused', updated_at = ? WHERE id = ?`)
         .run(now, release.id);
@@ -96,18 +107,17 @@ function tick(): void {
     const elapsed = hoursElapsed(since);
 
     if (elapsed < minHours) {
-      console.log(
-        `[scheduler] ${release.version} (${release.channel}) at ${release.rollout_percentage}% — ` +
-        `${elapsed.toFixed(1)}h / ${minHours}h elapsed, not ready`
+      logger.debug(
+        { version: release.version, channel: release.channel, rolloutPct: release.rollout_percentage, elapsed, minHours },
+        'scheduler: release not ready to advance',
       );
       continue;
     }
 
     // ── Advance ──────────────────────────────────────────────────────────────
-    console.log(
-      `[scheduler] ADVANCING ${release.version} (${release.channel}) ` +
-      `${release.rollout_percentage}% → ${next.percentage}% ` +
-      `(${elapsed.toFixed(1)}h elapsed)`
+    logger.info(
+      { version: release.version, channel: release.channel, fromPct: release.rollout_percentage, toPct: next.percentage, elapsed },
+      'scheduler advancing rollout',
     );
     db.prepare(`
       UPDATE releases
@@ -171,10 +181,9 @@ export function getSchedulerStatus(): SchedulerStatus {
 }
 
 export function startRolloutScheduler(): void {
-  console.log(
-    `[scheduler] Started — interval: ${INTERVAL_MS / 60_000}min, ` +
-    `crash threshold: ${(CRASH_THRESHOLD * 100).toFixed(0)}%, ` +
-    `stages: ${STAGES.map(s => `${s.percentage}%`).join('→')}`
+  logger.info(
+    { intervalMins: INTERVAL_MS / 60_000, crashThresholdPct: CRASH_THRESHOLD * 100, stages: STAGES.map(s => `${s.percentage}%`).join('→') },
+    'rollout scheduler started',
   );
   tick();
   setInterval(tick, INTERVAL_MS);
