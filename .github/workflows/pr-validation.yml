@@ -189,21 +189,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: pnpm
+          cache: npm
+          cache-dependency-path: ota-server/package-lock.json
 
-      - name: Install workspace dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Rebuild native modules
-        run: pnpm rebuild better-sqlite3
+      - name: Install OTA server dependencies
+        run: npm ci --prefer-offline
+        working-directory: ota-server
 
       - name: Run OTA server tests
-        run: pnpm --filter rumik-ota-server test
+        run: npm test
+        working-directory: ota-server
 
       - name: Upload OTA server coverage
         uses: actions/upload-artifact@v4
