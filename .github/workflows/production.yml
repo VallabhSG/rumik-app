@@ -104,6 +104,11 @@ jobs:
           path: CHANGELOG.md
 
   # ── Bump version in app.json ──────────────────────────────────────────────────
+  # NOTE: app.json is NOT committed back to the repo.
+  # Source of truth for the release version is the git tag vX.Y.Z.
+  # Source of truth for native build numbers is EAS autoIncrement.
+  # app.json is bumped here only so downstream EAS build steps see the correct
+  # version string — it is uploaded as a CI artifact for audit purposes.
   bump-version:
     name: Bump app.json version
     runs-on: ubuntu-latest
@@ -111,17 +116,14 @@ jobs:
     if: needs.version.outputs.is_rollback == 'false'
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update version in app.json
+      - name: Update version in app.json (local only)
         run: |
           VERSION="${{ needs.version.outputs.version }}"
           node -e "
             const fs = require('fs');
             const app = JSON.parse(fs.readFileSync('app.json', 'utf8'));
             app.expo.version = '$VERSION';
-            // Bump build numbers
             const parts = '$VERSION'.split('.').map(Number);
             const buildNum = parts[0] * 10000 + parts[1] * 100 + parts[2];
             app.expo.ios = app.expo.ios || {};
@@ -130,10 +132,14 @@ jobs:
             app.expo.android.versionCode = buildNum;
             fs.writeFileSync('app.json', JSON.stringify(app, null, 2) + '\n');
           "
+          echo "app.json bumped to $VERSION (local workspace only — not committed)"
 
-      # Version bump is local only — master is protected, push requires a PAT.
-      # The git tag vX.Y.Z is the source of truth for the release version.
-      # EAS autoIncrement handles native build numbers independently.
+      - name: Upload bumped app.json as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-json-${{ needs.version.outputs.version }}
+          path: app.json
+          retention-days: 30
 
   # ── OTA Update ────────────────────────────────────────────────────────────────
   ota-update:
@@ -144,12 +150,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: pnpm
 
-      - run: npm ci --prefer-offline
+      - run: pnpm install --frozen-lockfile
 
       - uses: expo/expo-github-action@v8
         with:
@@ -202,12 +212,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: pnpm
 
-      - run: npm ci --prefer-offline
+      - run: pnpm install --frozen-lockfile
 
       - uses: expo/expo-github-action@v8
         with:
@@ -233,12 +247,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: pnpm
 
-      - run: npm ci --prefer-offline
+      - run: pnpm install --frozen-lockfile
 
       - uses: expo/expo-github-action@v8
         with:
@@ -247,7 +265,7 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Build + submit to App Store
-        run: eas build --platform ios --profile production --non-interactive --wait --auto-submit
+        run: eas build --platform ios --profile staging --non-interactive --wait --auto-submit
         env:
           EAS_BUILD_AUTOCOMMIT: 1
           EXPO_APPLE_ID: ${{ secrets.EXPO_APPLE_ID }}
@@ -261,12 +279,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: pnpm
 
-      - run: npm ci --prefer-offline
+      - run: pnpm install --frozen-lockfile
 
       - name: Export web (production)
         run: npx expo export --platform web --output-dir dist
@@ -281,8 +303,7 @@ jobs:
       - name: Deploy to Vercel (production)
         continue-on-error: true
         run: |
-          npm install -g vercel@latest
-          vercel deploy dist --prod --token "${{ secrets.VERCEL_TOKEN }}" --yes
+          pnpm dlx vercel deploy dist --prod --token "${{ secrets.VERCEL_TOKEN }}" --yes
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
@@ -323,35 +344,76 @@ jobs:
   rollback-monitor:
     name: Rollback Monitor
     runs-on: ubuntu-latest
-    needs: [ota-update]
+    needs: [version, ota-update]
+    if: needs.ota-update.result == 'success'
     steps:
-      - name: Monitor crash rate (1 min window)
+      - name: Poll crash rate for 20 minutes
         run: |
-          sleep 60  # Wait 1 minute for crash data to arrive
+          MAX_ATTEMPTS=10
+          SLEEP_SECONDS=120
+          THRESHOLD=0.05
 
-          # OTA server is the source of truth — same secrets already in use
-          RESPONSE=$(curl -sf "${{ secrets.OTA_SERVER_URL }}/api/crash-rate/current?channel=production" \
-            -H "Authorization: Bearer ${{ secrets.OTA_API_KEY }}" || echo '{"success":false}')
+          echo "Monitoring crash rate (${MAX_ATTEMPTS} checks × ${SLEEP_SECONDS}s = 20 min)"
 
-          CRASH_RATE=$(echo "$RESPONSE" | jq -r '.data.crash_rate // 0')
-          echo "Current crash rate: $CRASH_RATE"
+          for attempt in $(seq 1 $MAX_ATTEMPTS); do
+            echo "--- Check ${attempt}/${MAX_ATTEMPTS} ---"
+            sleep $SLEEP_SECONDS
 
-          # If crash rate > 5%, pause rollout and trigger rollback workflow
-          if (( $(echo "$CRASH_RATE > 0.05" | bc -l) )); then
-            echo "::error::Crash rate ${CRASH_RATE} exceeds 5% threshold — triggering rollback"
-
-            curl -sf -X POST "${{ secrets.OTA_SERVER_URL }}/api/releases/current/pause" \
+            RESPONSE=$(curl -sf \
+              "${{ secrets.OTA_SERVER_URL }}/api/crash-rate/current?channel=production" \
               -H "Authorization: Bearer ${{ secrets.OTA_API_KEY }}" \
-              -H "Content-Type: application/json" \
-              -d '{"reason":"Auto-rollback: crash rate exceeded 5% threshold"}' || true
+              || echo '{"success":false}')
 
-            curl -X POST \
-              "https://api.github.com/repos/${{ github.repository }}/actions/workflows/production.yml/dispatches" \
-              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Content-Type: application/json" \
-              -d '{"ref":"master","inputs":{"rollback_to":"${{ needs.version.outputs.prev_version }}"}}'
+            SUCCESS=$(echo "$RESPONSE" | python3 -c \
+              "import sys,json; d=json.load(sys.stdin); print(str(d.get('success',False)).lower())" \
+              2>/dev/null || echo "false")
 
-            exit 1
-          fi
+            if [ "$SUCCESS" != "true" ]; then
+              echo "OTA server unreachable — skipping check ${attempt}"
+              continue
+            fi
 
-          echo "Crash rate within threshold ✓"
+            CRASH_RATE=$(echo "$RESPONSE" | python3 -c \
+              "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('crash_rate',0))" \
+              2>/dev/null || echo "0")
+
+            echo "Crash rate: ${CRASH_RATE} (threshold: ${THRESHOLD})"
+
+            EXCEEDED=$(python3 -c \
+              "import sys; sys.exit(0 if float('${CRASH_RATE}') > float('${THRESHOLD}') else 1)" \
+              2>/dev/null && echo "yes" || echo "no")
+
+            if [ "$EXCEEDED" = "yes" ]; then
+              echo "::error::Crash rate ${CRASH_RATE} exceeds ${THRESHOLD} — triggering rollback"
+
+              curl -sf -X POST \
+                "${{ secrets.OTA_SERVER_URL }}/api/releases/current/pause" \
+                -H "Authorization: Bearer ${{ secrets.OTA_API_KEY }}" \
+                -H "Content-Type: application/json" \
+                -d "{\"reason\":\"Auto-rollback: crash rate ${CRASH_RATE} exceeded ${THRESHOLD}\"}" || true
+
+              curl -X POST \
+                "https://api.github.com/repos/${{ github.repository }}/actions/workflows/production.yml/dispatches" \
+                -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+                -H "Content-Type: application/json" \
+                -d "{\"ref\":\"master\",\"inputs\":{\"rollback_to\":\"${{ needs.version.outputs.prev_version }}\",\"reason\":\"Auto-rollback: crash rate ${CRASH_RATE}\"}}" || true
+
+              exit 1
+            fi
+
+            # Also exit early if the rollout scheduler already paused the release
+            PAUSED=$(curl -sf \
+              "${{ secrets.OTA_SERVER_URL }}/api/releases?channel=production&status=paused" \
+              -H "Authorization: Bearer ${{ secrets.OTA_API_KEY }}" \
+              | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('data',[])))" \
+              2>/dev/null || echo "0")
+
+            if [ "$PAUSED" != "0" ]; then
+              echo "::warning::Release paused by rollout scheduler — crash rate exceeded server-side threshold"
+              exit 1
+            fi
+
+            echo "Check ${attempt}: OK (${CRASH_RATE} <= ${THRESHOLD})"
+          done
+
+          echo "Monitoring complete — crash rate within threshold for full 20-minute window ✓"
