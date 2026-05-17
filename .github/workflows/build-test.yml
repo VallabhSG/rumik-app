@@ -108,6 +108,8 @@ jobs:
           fail_ci_if_error: false
 
   # ── E2E tests (web) ───────────────────────────────────────────────────────────
+  # Uses Vercel preview URL — avoids React Native Web blank-page issue in
+  # headless Chromium when serving the bundle locally.
   e2e-web:
     name: E2E Tests (Web)
     runs-on: ubuntu-latest
@@ -139,19 +141,32 @@ jobs:
         run: npx playwright install-deps chromium
         if: steps.playwright-cache.outputs.cache-hit == 'true'
 
-      - name: Download web dist
-        uses: actions/download-artifact@v4
-        with:
-          name: web-dist-${{ github.sha }}
-          path: dist/
-
-      - name: Serve + run E2E
+      - name: Get Vercel preview URL
+        id: vercel
         run: |
-          npx serve dist -p 3000 &
-          npx wait-on http://localhost:3000 --timeout 30000
-          npx playwright test --project=chromium
+          # Poll Vercel API until the deployment for this commit is READY (max 3 min)
+          for i in $(seq 1 18); do
+            DEPLOY_URL=$(curl -sf \
+              "https://api.vercel.com/v6/deployments?projectId=${{ secrets.VERCEL_PROJECT_ID }}&meta-githubCommitSha=${{ github.sha }}&state=READY&limit=1" \
+              -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+              | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['deployments'][0]['url'] if d.get('deployments') else '')" 2>/dev/null || echo "")
+            if [ -n "$DEPLOY_URL" ]; then
+              echo "url=https://$DEPLOY_URL" >> $GITHUB_OUTPUT
+              echo "Vercel preview: https://$DEPLOY_URL"
+              break
+            fi
+            echo "Waiting for Vercel deployment ($i/18)..."
+            sleep 10
+          done
+          if [ -z "$DEPLOY_URL" ]; then
+            echo "::error::Vercel deployment not ready after 3 minutes"
+            exit 1
+          fi
+
+      - name: Run E2E tests against Vercel preview
+        run: npx playwright test --project=chromium
         env:
-          BASE_URL: http://localhost:3000
+          BASE_URL: ${{ steps.vercel.outputs.url }}
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
@@ -178,15 +193,28 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Download web dist
-        uses: actions/download-artifact@v4
-        with:
-          name: web-dist-${{ github.sha }}
-          path: dist/
-
-      - name: Run Lighthouse CI
+      - name: Get Vercel preview URL
+        id: vercel
         run: |
-          pnpm dlx @lhci/cli autorun
+          for i in $(seq 1 18); do
+            DEPLOY_URL=$(curl -sf \
+              "https://api.vercel.com/v6/deployments?projectId=${{ secrets.VERCEL_PROJECT_ID }}&meta-githubCommitSha=${{ github.sha }}&state=READY&limit=1" \
+              -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+              | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['deployments'][0]['url'] if d.get('deployments') else '')" 2>/dev/null || echo "")
+            if [ -n "$DEPLOY_URL" ]; then
+              echo "url=https://$DEPLOY_URL" >> $GITHUB_OUTPUT
+              break
+            fi
+            echo "Waiting for Vercel deployment ($i/18)..."
+            sleep 10
+          done
+          if [ -z "$DEPLOY_URL" ]; then
+            echo "::error::Vercel deployment not ready"
+            exit 1
+          fi
+
+      - name: Run Lighthouse CI against Vercel preview
+        run: pnpm dlx @lhci/cli autorun --collect.url=${{ steps.vercel.outputs.url }}
         env:
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
 

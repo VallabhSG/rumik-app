@@ -1,15 +1,13 @@
 module.exports = {
   ci: {
     collect: {
-      // URL mode: staticDistDir has known NO_FCP false-positives with React SPAs.
-      // We start our own server so Lighthouse runs in a full browser context.
+      // URL is overridden by --collect.url CLI flag in CI (Vercel preview URL).
+      // The fallback is only used for local development.
       url: ['http://localhost:3000'],
-      startServerCommand: 'npx serve ./dist -p 3000 --no-clipboard',
-      startServerReadyPattern: 'Accepting connections',
       numberOfRuns: 1,
       settings: {
-        maxWaitForFcp: 45000,
-        maxWaitForLoad: 60000,
+        maxWaitForFcp: 30000,
+        maxWaitForLoad: 45000,
         chromeFlags: '--no-sandbox --disable-dev-shm-usage',
       },
     },
