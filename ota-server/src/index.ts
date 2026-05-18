@@ -93,12 +93,14 @@ app.get('/api/scheduler', (_req, res) => {
 // Admin session routes (no auth required — handles login/logout)
 app.use('/admin/session', express.json(), adminSessionRouter);
 
-// Login page and its CSS asset (no auth required)
-app.use('/admin/login.html', express.static(path.join(__dirname, '../public/admin/login.html')));
-app.use('/admin/style.css', express.static(path.join(__dirname, '../public/admin/style.css')));
+// Login page and its CSS — served without auth.
+// express.static() needs a directory, not a file path, so use sendFile directly.
+const adminDir = path.join(__dirname, '../public/admin');
+app.get('/admin/login.html', (_req, res) => res.sendFile(path.join(adminDir, 'login.html')));
+app.get('/admin/style.css',  (_req, res) => res.sendFile(path.join(adminDir, 'style.css')));
 
-// Protected admin dashboard — requires valid session cookie
-app.use('/admin', requireAdminSession, express.static(path.join(__dirname, '../public/admin')));
+// All other /admin routes require a valid session cookie
+app.use('/admin', requireAdminSession, express.static(adminDir));
 
 // 404
 app.use((_req, res) => {
