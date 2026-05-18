@@ -15,6 +15,7 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/public ./public
 
 ENV PORT=4000
 ENV DATA_DIR=/data
