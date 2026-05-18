@@ -14,14 +14,18 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
       RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      REDIS_URL: ${REDIS_URL:-}
-      DATABASE_URL: ${DATABASE_URL:-}
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgres://${POSTGRES_USER:-rumik}:${POSTGRES_PASSWORD:-rumik}@postgres:5432/rumik
       OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
     volumes:
       - ota-data:/data
     depends_on:
-      - prometheus
-      - loki
+      postgres:
+        condition: service_healthy
+      prometheus:
+        condition: service_started
+      loki:
+        condition: service_started
     networks:
       - rumik-net
     restart: unless-stopped
@@ -110,6 +114,26 @@ services:
       - rumik-net
     restart: unless-stopped
 
+  postgres:
+    image: postgres:16-alpine
+    container_name: rumik-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: rumik
+      POSTGRES_USER: ${POSTGRES_USER:-rumik}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rumik}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - rumik-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rumik} -d rumik"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   redis:
     image: redis:7.2-alpine
     container_name: rumik-redis
@@ -157,6 +181,7 @@ services:
 
 volumes:
   ota-data:
+  postgres-data:
   prometheus-data:
   grafana-data:
   loki-data:
