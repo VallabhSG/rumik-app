@@ -169,12 +169,12 @@ services:
     container_name: rumik-alertmanager
     ports:
       - "9093:9093"
+    environment:
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-https://hooks.slack.com/services/placeholder}
     volumes:
-      - ./observability/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./observability/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml.tmpl:ro
       - alertmanager-data:/alertmanager
-    command:
-      - '--config.file=/etc/alertmanager/alertmanager.yml'
-      - '--storage.path=/alertmanager'
+    entrypoint: ["/bin/sh", "-c", "sed 's|__SLACK_WEBHOOK_URL__|'\"$$SLACK_WEBHOOK_URL\"'|g' /etc/alertmanager/alertmanager.yml.tmpl > /tmp/am.yml && exec /bin/alertmanager --config.file=/tmp/am.yml --storage.path=/alertmanager"]
     networks:
       - rumik-net
     restart: unless-stopped
