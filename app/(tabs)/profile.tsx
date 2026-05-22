@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, Image, TouchableOpacity, StyleSheet, ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser, useAuth } from '@clerk/clerk-expo';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import Constants from 'expo-constants';
 import { useOta } from '../../src/contexts/OtaContext';
 import { getLiked } from '../../src/services/library';
@@ -17,11 +17,11 @@ export default function ProfileScreen() {
   const { status: otaStatus } = useOta();
   const [likedCount, setLikedCount] = useState(0);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     if (user?.id) {
       getLiked(user.id).then((t) => setLikedCount(t.length));
     }
-  }, [user?.id]);
+  }, [user?.id]));
 
   const handleSignOut = async () => {
     await signOut();
