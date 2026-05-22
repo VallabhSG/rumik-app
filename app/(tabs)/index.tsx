@@ -10,6 +10,8 @@ import { getCharts, type DeezerTrack } from '../../src/services/deezer';
 import { getRecent, pushRecent, toggleLike, isLiked } from '../../src/services/library';
 import { Colors, Typography, Spacing } from '../../src/theme/tokens';
 import { useMiniPlayerPadding } from '../../src/hooks/useMiniPlayerPadding';
+import { useFeatureFlag, useExperiment } from '../../src/hooks/useRemoteConfig';
+import { Pill } from '../../src/components/ui/Pill';
 
 export default function HomeScreen() {
   const { user } = useUser();
@@ -19,6 +21,10 @@ export default function HomeScreen() {
   const [likedIds, setLikedIds] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
   const miniPlayerPadding = useMiniPlayerPadding();
+  const showGenrePills = useFeatureFlag('show_genre_pills');
+  const greetingStyle = useExperiment('home_greeting_style', 'control');
+  const chartLimit = parseInt(useExperiment('chart_limit', '8'), 10);
+  const [activeGenre, setActiveGenre] = useState<string>('All');
 
   const userId = user?.id ?? '';
 
@@ -55,7 +61,7 @@ export default function HomeScreen() {
   })();
 
   const featured = charts[0];
-  const chartList = charts.slice(1, 9);
+  const chartList = charts.slice(1, chartLimit);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -69,9 +75,19 @@ export default function HomeScreen() {
             <Text style={styles.greeting}>
               {greeting}{user?.firstName ? `, ${user.firstName}` : ''}
             </Text>
-            <Text style={styles.wordmark}>rumik</Text>
+            <Text style={[styles.wordmark, greetingStyle === 'bold' && styles.wordmarkBold]}>
+              rumik
+            </Text>
           </View>
         </View>
+
+        {showGenrePills && (
+          <View style={styles.genrePills}>
+            {['All', 'Pop', 'Hip-Hop', 'Electronic', 'R&B'].map((g) => (
+              <Pill key={g} label={g} active={activeGenre === g} />
+            ))}
+          </View>
+        )}
 
         {loading && (
           <ActivityIndicator color={Colors.accent} style={{ marginTop: Spacing.xl }} />
@@ -133,4 +149,6 @@ const styles = StyleSheet.create({
   },
   greeting: { ...Typography.label, color: Colors.textSecondary },
   wordmark: { fontSize: 28, fontWeight: '800', letterSpacing: -1, color: Colors.text, marginTop: 2 },
+  wordmarkBold: { fontSize: 38, letterSpacing: -2 },
+  genrePills: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: Spacing.md },
 });

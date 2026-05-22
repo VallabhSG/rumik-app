@@ -16,10 +16,12 @@ import { useMiniPlayerPadding } from '../../src/hooks/useMiniPlayerPadding';
 import { searchTracks, getCharts, type DeezerTrack } from '../../src/services/deezer';
 import { pushRecent, toggleLike, isLiked } from '../../src/services/library';
 import { Colors, Typography, Spacing, Radius } from '../../src/theme/tokens';
+import { useKillSwitch } from '../../src/hooks/useRemoteConfig';
 
 export default function DiscoverScreen() {
   const { play } = usePlayer();
   const miniPlayerPadding = useMiniPlayerPadding();
+  const searchDisabled = useKillSwitch('disable_search');
   const { user } = useUser();
   const userId = user?.id ?? '';
   const [query, setQuery] = useState('');
@@ -69,6 +71,11 @@ export default function DiscoverScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
+      {searchDisabled && (
+        <View style={styles.killBanner}>
+          <Text style={styles.killBannerText}>🔧 Search is temporarily unavailable. Check back soon.</Text>
+        </View>
+      )}
       <View style={styles.header}>
         <Text style={styles.title}>Discover</Text>
         <View style={styles.searchBar}>
@@ -83,7 +90,7 @@ export default function DiscoverScreen() {
           />
         </View>
       </View>
-      {loading && <ActivityIndicator color={Colors.accent} style={{ marginTop: Spacing.md }} />}
+      {!searchDisabled && loading && <ActivityIndicator color={Colors.accent} style={{ marginTop: Spacing.md }} />}
       {showEmpty && (
         <Text style={styles.empty}>No results for "{query}"</Text>
       )}
@@ -112,6 +119,8 @@ export default function DiscoverScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bg },
+  killBanner: { backgroundColor: Colors.surface, borderBottomWidth: 1, borderBottomColor: Colors.border, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm },
+  killBannerText: { ...Typography.caption, color: Colors.textSecondary, textAlign: 'center' },
   header: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg },
   title: {
     fontSize: 22,

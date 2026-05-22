@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, Image, TouchableOpacity, StyleSheet, ScrollView,
+  View, Text, Image, TouchableOpacity, StyleSheet, ScrollView, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser, useAuth } from '@clerk/clerk-expo';
@@ -8,6 +8,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import Constants from 'expo-constants';
 import { useOta } from '../../src/contexts/OtaContext';
 import { getLiked } from '../../src/services/library';
+import { useDynamicUrl } from '../../src/hooks/useRemoteConfig';
 import { Colors, Typography, Spacing, Radius } from '../../src/theme/tokens';
 
 export default function ProfileScreen() {
@@ -15,6 +16,7 @@ export default function ProfileScreen() {
   const { signOut } = useAuth();
   const router = useRouter();
   const { status: otaStatus } = useOta();
+  const supportUrl = useDynamicUrl('support_url', 'https://github.com/VallabhSG/rumik-app');
   const [likedCount, setLikedCount] = useState(0);
 
   useFocusEffect(useCallback(() => {
@@ -55,8 +57,16 @@ export default function ProfileScreen() {
         <Text style={styles.sectionLabel}>APP</Text>
         <View style={styles.infoCard}>
           <InfoRow label="Version" value={`v${version}`} accent />
-          <InfoRow label="OTA Status" value={otaStatus} />
+          <InfoRow label="OTA Channel" value={otaStatus === 'idle' ? 'dev' : 'production'} />
+          <InfoRow label="Update Status" value={otaStatus} />
         </View>
+
+        <TouchableOpacity
+          style={styles.supportBtn}
+          onPress={() => Linking.openURL(supportUrl)}
+        >
+          <Text style={styles.supportText}>Help & Support</Text>
+        </TouchableOpacity>
 
         <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
           <Text style={styles.signOutText}>Sign out</Text>
@@ -102,6 +112,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     marginBottom: Spacing.lg,
   },
+  supportBtn: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    alignItems: 'center' as const,
+    marginBottom: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  supportText: { ...Typography.body, color: Colors.accent },
   signOutBtn: {
     backgroundColor: Colors.surface,
     borderRadius: Radius.md,
