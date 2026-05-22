@@ -4,7 +4,8 @@ import { useUser } from '@clerk/clerk-expo';
 import { useFocusEffect } from 'expo-router';
 import { TrackRow } from '../../src/components/track/TrackRow';
 import { usePlayer } from '../../src/services/player';
-import { getLiked, toggleLike, pushRecent, getRecent, type DeezerTrack } from '../../src/services/library';
+import type { DeezerTrack } from '../../src/services/deezer';
+import { getLiked, toggleLike, pushRecent, getRecent } from '../../src/services/library';
 import { Colors, Typography, Spacing, Radius } from '../../src/theme/tokens';
 
 const TABS = ['Liked', 'Recent'] as const;
