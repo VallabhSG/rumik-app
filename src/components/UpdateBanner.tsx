@@ -1,85 +1,52 @@
-import React from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-} from "react-native";
-import { useOta } from "../contexts/OtaContext";
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useOta } from '../contexts/OtaContext';
+import { Colors, Typography, Spacing, Radius } from '../theme/tokens';
 
-/**
- * Minimal non-intrusive banner that surfaces OTA update state.
- * Renders nothing when idle, up-to-date, or not in a rollout cohort.
- *
- * Replace this with your own design — the hook is the important part.
- */
 export function UpdateBanner() {
   const { status, download, applyNow } = useOta();
+  if (status !== 'available' && status !== 'ready' && status !== 'downloading') return null;
 
-  if (status === "available") {
-    return (
-      <View style={styles.banner}>
-        <Text style={styles.label}>Update available</Text>
+  return (
+    <View style={styles.banner}>
+      <Text style={styles.text}>
+        {status === 'downloading'
+          ? 'Downloading update…'
+          : status === 'ready'
+          ? 'Update ready'
+          : 'Update available'}
+      </Text>
+      {status === 'available' && (
         <TouchableOpacity style={styles.btn} onPress={download}>
           <Text style={styles.btnText}>Download</Text>
         </TouchableOpacity>
-      </View>
-    );
-  }
-
-  if (status === "downloading") {
-    return (
-      <View style={styles.banner}>
-        <ActivityIndicator size="small" color="#a5b4fc" />
-        <Text style={styles.label}>Downloading update…</Text>
-      </View>
-    );
-  }
-
-  if (status === "ready") {
-    return (
-      <View style={styles.banner}>
-        <Text style={styles.label}>Update ready</Text>
+      )}
+      {status === 'ready' && (
         <TouchableOpacity style={styles.btn} onPress={applyNow}>
           <Text style={styles.btnText}>Restart</Text>
         </TouchableOpacity>
-      </View>
-    );
-  }
-
-  return null;
+      )}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
   banner: {
-    position: "absolute",
-    bottom: 32,
-    left: 16,
-    right: 16,
-    backgroundColor: "#1e1b4b",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
   },
-  label: {
-    color: "#e0e7ff",
-    fontSize: 14,
-    flex: 1,
-  },
+  text: { ...Typography.caption, color: Colors.text, flex: 1 },
   btn: {
-    backgroundColor: "#6366f1",
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    backgroundColor: Colors.accent,
+    borderRadius: Radius.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
   },
-  btnText: {
-    color: "#ffffff",
-    fontSize: 13,
-    fontWeight: "600",
-  },
+  btnText: { ...Typography.label, color: Colors.white },
 });
