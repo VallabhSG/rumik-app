@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, Image, TouchableOpacity, StyleSheet,
-  SafeAreaView, ScrollView,
+  View, Text, Image, TouchableOpacity, StyleSheet, ScrollView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser, useAuth } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';

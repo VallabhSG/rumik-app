@@ -5,9 +5,9 @@ import {
   TextInput,
   FlatList,
   StyleSheet,
-  SafeAreaView,
   ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '@clerk/clerk-expo';
 import { SectionLabel } from '../../src/components/ui/SectionLabel';
 import { TrackRow } from '../../src/components/track/TrackRow';
