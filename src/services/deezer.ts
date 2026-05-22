@@ -12,9 +12,16 @@ export interface DeezerTrack {
 async function fetchDeezer<T>(path: string): Promise<T | null> {
   try {
     const res = await fetch(`${BASE}${path}`);
+    console.log(`[Deezer] ${path} → ${res.status}`);
     if (!res.ok) return null;
-    return res.json() as Promise<T>;
-  } catch {
+    const json = await res.json() as Record<string, unknown>;
+    if (json.error) {
+      console.warn(`[Deezer] API error:`, JSON.stringify(json.error));
+      return null;
+    }
+    return json as T;
+  } catch (e) {
+    console.warn(`[Deezer] fetch failed:`, e);
     return null;
   }
 }

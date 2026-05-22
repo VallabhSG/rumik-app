@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useRef, useState, useCallback, useEffect } from 'react';
-import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
+import { createAudioPlayer } from 'expo-audio';
 import type { AudioPlayer } from 'expo-audio';
 import type { DeezerTrack } from './deezer';
 
@@ -40,7 +40,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       playerRef.current.remove();
       playerRef.current = null;
     }
-    await setAudioModeAsync({ playsInSilentModeIOS: true });
     const p = createAudioPlayer({ uri: newTrack.preview });
     playerRef.current = p;
     setTrack(newTrack);
