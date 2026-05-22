@@ -2,21 +2,21 @@ import { renderHook, act } from '@testing-library/react-native';
 import { PlayerProvider, usePlayer } from '../../services/player';
 import React from 'react';
 
-jest.mock('expo-av', () => ({
-  Audio: {
-    Sound: { createAsync: jest.fn() },
-    setAudioModeAsync: jest.fn(),
-  },
+jest.mock('expo-audio', () => ({
+  createAudioPlayer: jest.fn(),
+  setAudioModeAsync: jest.fn().mockResolvedValue(undefined),
 }));
 
-import { Audio } from 'expo-av';
+import { createAudioPlayer } from 'expo-audio';
 
-const mockSound = {
-  playAsync: jest.fn().mockResolvedValue({}),
-  pauseAsync: jest.fn().mockResolvedValue({}),
-  setPositionAsync: jest.fn().mockResolvedValue({}),
-  unloadAsync: jest.fn().mockResolvedValue({}),
-  setOnPlaybackStatusUpdate: jest.fn(),
+const mockPlayer = {
+  play: jest.fn(),
+  pause: jest.fn(),
+  seekTo: jest.fn(),
+  remove: jest.fn(),
+  playing: false,
+  currentTime: 0,
+  duration: 30,
 };
 
 const mockTrack = {
@@ -30,10 +30,7 @@ const mockTrack = {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  (Audio.Sound.createAsync as jest.Mock).mockResolvedValue({
-    sound: mockSound,
-    status: { isLoaded: true, durationMillis: 30000 },
-  });
+  (createAudioPlayer as jest.Mock).mockReturnValue({ ...mockPlayer });
 });
 
 describe('usePlayer', () => {

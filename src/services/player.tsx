@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useRef, useState, useCallback } from 'react';
-import { Audio } from 'expo-av';
+import React, { createContext, useContext, useRef, useState, useCallback, useEffect } from 'react';
+import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
+import type { AudioPlayer } from 'expo-audio';
 import type { DeezerTrack } from './deezer';
 
 interface PlayerState {
@@ -16,52 +17,50 @@ interface PlayerState {
 const PlayerContext = createContext<PlayerState | null>(null);
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
-  const soundRef = useRef<Audio.Sound | null>(null);
+  const playerRef = useRef<AudioPlayer | null>(null);
   const [track, setTrack] = useState<DeezerTrack | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [positionMs, setPositionMs] = useState(0);
   const [durationMs, setDurationMs] = useState(0);
 
-  const unloadCurrent = useCallback(async () => {
-    if (soundRef.current) {
-      await soundRef.current.unloadAsync();
-      soundRef.current = null;
-    }
+  // Poll the player for position/duration updates every 250ms
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const p = playerRef.current;
+      if (!p) return;
+      setPositionMs(p.currentTime * 1000);
+      if (p.duration) setDurationMs(p.duration * 1000);
+      setIsPlaying(p.playing);
+    }, 250);
+    return () => clearInterval(interval);
   }, []);
 
   const play = useCallback(async (newTrack: DeezerTrack) => {
-    await unloadCurrent();
-    await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
-    const { sound, status } = await Audio.Sound.createAsync(
-      { uri: newTrack.preview },
-      { shouldPlay: true }
-    );
-    soundRef.current = sound;
-    setTrack(newTrack);
-    setIsPlaying(true);
-    if (status.isLoaded && status.durationMillis) {
-      setDurationMs(status.durationMillis);
+    if (playerRef.current) {
+      playerRef.current.remove();
+      playerRef.current = null;
     }
-    sound.setOnPlaybackStatusUpdate((s) => {
-      if (!s.isLoaded) return;
-      setPositionMs(s.positionMillis ?? 0);
-      setIsPlaying(s.isPlaying);
-      if (s.didJustFinish) setIsPlaying(false);
-    });
-  }, [unloadCurrent]);
+    await setAudioModeAsync({ playsInSilentModeIOS: true });
+    const p = createAudioPlayer({ uri: newTrack.preview });
+    playerRef.current = p;
+    setTrack(newTrack);
+    setPositionMs(0);
+    setIsPlaying(true);
+    p.play();
+  }, []);
 
   const pause = useCallback(async () => {
-    await soundRef.current?.pauseAsync();
+    playerRef.current?.pause();
     setIsPlaying(false);
   }, []);
 
   const resume = useCallback(async () => {
-    await soundRef.current?.playAsync();
+    playerRef.current?.play();
     setIsPlaying(true);
   }, []);
 
   const seek = useCallback(async (ms: number) => {
-    await soundRef.current?.setPositionAsync(ms);
+    playerRef.current?.seekTo(ms / 1000);
   }, []);
 
   return (
