@@ -5,6 +5,7 @@ import { useUser } from '@clerk/clerk-expo';
 import { useFocusEffect } from 'expo-router';
 import { TrackRow } from '../../src/components/track/TrackRow';
 import { usePlayer } from '../../src/services/player';
+import { useMiniPlayerPadding } from '../../src/hooks/useMiniPlayerPadding';
 import type { DeezerTrack } from '../../src/services/deezer';
 import { getLiked, toggleLike, pushRecent, getRecent } from '../../src/services/library';
 import { Colors, Typography, Spacing, Radius } from '../../src/theme/tokens';
@@ -16,6 +17,7 @@ export default function LibraryScreen() {
   const { user } = useUser();
   const userId = user?.id ?? '';
   const { play } = usePlayer();
+  const miniPlayerPadding = useMiniPlayerPadding();
   const [activeTab, setActiveTab] = useState<Tab>('Liked');
   const [liked, setLiked] = useState<DeezerTrack[]>([]);
   const [recent, setRecent] = useState<DeezerTrack[]>([]);
@@ -63,7 +65,7 @@ export default function LibraryScreen() {
       <FlatList
         data={list}
         keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: Spacing.xl + miniPlayerPadding }]}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <Text style={styles.empty}>
@@ -106,7 +108,7 @@ const styles = StyleSheet.create({
   pillActive: { backgroundColor: Colors.accent },
   pillText: { fontSize: 11, fontWeight: '700', color: Colors.textSecondary },
   pillTextActive: { color: Colors.white },
-  list: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xl },
+  list: { paddingHorizontal: Spacing.lg },
   empty: {
     ...Typography.body,
     color: Colors.textSecondary,

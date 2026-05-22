@@ -12,12 +12,14 @@ import { useUser } from '@clerk/clerk-expo';
 import { SectionLabel } from '../../src/components/ui/SectionLabel';
 import { TrackRow } from '../../src/components/track/TrackRow';
 import { usePlayer } from '../../src/services/player';
+import { useMiniPlayerPadding } from '../../src/hooks/useMiniPlayerPadding';
 import { searchTracks, getCharts, type DeezerTrack } from '../../src/services/deezer';
 import { pushRecent, toggleLike, isLiked } from '../../src/services/library';
 import { Colors, Typography, Spacing, Radius } from '../../src/theme/tokens';
 
 export default function DiscoverScreen() {
   const { play } = usePlayer();
+  const miniPlayerPadding = useMiniPlayerPadding();
   const { user } = useUser();
   const userId = user?.id ?? '';
   const [query, setQuery] = useState('');
@@ -88,7 +90,7 @@ export default function DiscoverScreen() {
       <FlatList
         data={displayList}
         keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: Spacing.xl + miniPlayerPadding }]}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <SectionLabel>{query.length >= 2 ? 'RESULTS' : 'CHARTS'}</SectionLabel>
@@ -128,7 +130,7 @@ const styles = StyleSheet.create({
   },
   searchIcon: { fontSize: 14, marginRight: Spacing.xs },
   searchInput: { flex: 1, padding: Spacing.sm, ...Typography.body, color: Colors.text },
-  list: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xl },
+  list: { paddingHorizontal: Spacing.lg },
   empty: {
     ...Typography.body,
     color: Colors.textSecondary,

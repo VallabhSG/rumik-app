@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '@clerk/clerk-expo';
 import { SectionLabel } from '../../src/components/ui/SectionLabel';
@@ -9,6 +9,7 @@ import { usePlayer } from '../../src/services/player';
 import { getCharts, type DeezerTrack } from '../../src/services/deezer';
 import { getRecent, pushRecent, toggleLike, isLiked } from '../../src/services/library';
 import { Colors, Typography, Spacing } from '../../src/theme/tokens';
+import { useMiniPlayerPadding } from '../../src/hooks/useMiniPlayerPadding';
 
 export default function HomeScreen() {
   const { user } = useUser();
@@ -16,11 +17,13 @@ export default function HomeScreen() {
   const [charts, setCharts] = useState<DeezerTrack[]>([]);
   const [recent, setRecent] = useState<DeezerTrack[]>([]);
   const [likedIds, setLikedIds] = useState<Set<number>>(new Set());
+  const [loading, setLoading] = useState(true);
+  const miniPlayerPadding = useMiniPlayerPadding();
 
   const userId = user?.id ?? '';
 
   useEffect(() => {
-    getCharts().then(setCharts);
+    getCharts().then((tracks) => { setCharts(tracks); setLoading(false); });
   }, []);
 
   useEffect(() => {
@@ -58,7 +61,7 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.safe}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: Spacing.xl + miniPlayerPadding }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
@@ -69,6 +72,10 @@ export default function HomeScreen() {
             <Text style={styles.wordmark}>rumik</Text>
           </View>
         </View>
+
+        {loading && (
+          <ActivityIndicator color={Colors.accent} style={{ marginTop: Spacing.xl }} />
+        )}
 
         {recent.length > 0 && (
           <>
@@ -117,7 +124,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bg },
   scroll: { flex: 1 },
-  content: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xl },
+  content: { paddingHorizontal: Spacing.lg },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',

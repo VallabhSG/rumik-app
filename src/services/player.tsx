@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useRef, useState, useCallback, useEffect } from 'react';
-import { createAudioPlayer } from 'expo-audio';
+import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import type { AudioPlayer } from 'expo-audio';
 import type { DeezerTrack } from './deezer';
 
@@ -39,6 +39,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (playerRef.current) {
       playerRef.current.remove();
       playerRef.current = null;
+    }
+    // playsInSilentMode: audio plays even when iPhone is silenced.
+    // Wrapped in try-catch because Expo Go's pre-compiled native module may
+    // not match the JS API version — safe to ignore in dev.
+    try {
+      await setAudioModeAsync({ playsInSilentMode: true });
+    } catch {
+      // no-op in Expo Go; works correctly in EAS production builds
     }
     const p = createAudioPlayer({ uri: newTrack.preview });
     playerRef.current = p;
