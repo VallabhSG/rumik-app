@@ -1,4 +1,4 @@
-import { usePlayer } from '../services/player';
+import { usePlayer } from "../services/player";
 
 export const MINI_PLAYER_HEIGHT = 56;
 

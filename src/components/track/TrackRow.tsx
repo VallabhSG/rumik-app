@@ -1,7 +1,7 @@
-import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
-import { Colors, Typography, Spacing, Radius } from '../../theme/tokens';
-import type { DeezerTrack } from '../../services/deezer';
+import React from "react";
+import { View, Text, Image, TouchableOpacity, StyleSheet } from "react-native";
+import { Colors, Typography, Spacing, Radius } from "../../theme/tokens";
+import type { DeezerTrack } from "../../services/deezer";
 
 interface Props {
   track: DeezerTrack;
@@ -12,19 +12,25 @@ interface Props {
   showLike?: boolean;
 }
 
-export function TrackRow({ track, onPlay, rank, isLiked, onLike, showLike }: Props) {
+export function TrackRow({
+  track,
+  onPlay,
+  rank,
+  isLiked,
+  onLike,
+  showLike,
+}: Props) {
   return (
     <View style={styles.row}>
-      {rank !== undefined && (
-        <Text style={styles.rank}>#{rank}</Text>
-      )}
-      <Image
-        source={{ uri: track.album.cover_medium }}
-        style={styles.thumb}
-      />
+      {rank !== undefined && <Text style={styles.rank}>#{rank}</Text>}
+      <Image source={{ uri: track.album.cover_medium }} style={styles.thumb} />
       <View style={styles.info}>
-        <Text style={styles.title} numberOfLines={1}>{track.title}</Text>
-        <Text style={styles.artist} numberOfLines={1}>{track.artist.name}</Text>
+        <Text style={styles.title} numberOfLines={1}>
+          {track.title}
+        </Text>
+        <Text style={styles.artist} numberOfLines={1}>
+          {track.artist.name}
+        </Text>
       </View>
       {showLike && onLike && (
         <TouchableOpacity
@@ -48,8 +54,8 @@ export function TrackRow({ track, onPlay, rank, isLiked, onLike, showLike }: Pro
 
 const styles = StyleSheet.create({
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: Spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,

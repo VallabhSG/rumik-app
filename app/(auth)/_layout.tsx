@@ -1,5 +1,5 @@
-import { Stack } from 'expo-router';
-import { Colors } from '../../src/theme/tokens';
+import { Stack } from "expo-router";
+import { Colors } from "../../src/theme/tokens";
 
 export default function AuthLayout() {
   return (

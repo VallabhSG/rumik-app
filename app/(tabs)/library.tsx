@@ -1,24 +1,35 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useUser } from '@clerk/clerk-expo';
-import { useFocusEffect } from 'expo-router';
-import { TrackRow } from '../../src/components/track/TrackRow';
-import { usePlayer } from '../../src/services/player';
-import { useMiniPlayerPadding } from '../../src/hooks/useMiniPlayerPadding';
-import type { DeezerTrack } from '../../src/services/deezer';
-import { getLiked, toggleLike, pushRecent, getRecent } from '../../src/services/library';
-import { Colors, Typography, Spacing, Radius } from '../../src/theme/tokens';
+import React, { useState, useCallback } from "react";
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  TouchableOpacity,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useUser } from "@clerk/clerk-expo";
+import { useFocusEffect } from "expo-router";
+import { TrackRow } from "../../src/components/track/TrackRow";
+import { usePlayer } from "../../src/services/player";
+import { useMiniPlayerPadding } from "../../src/hooks/useMiniPlayerPadding";
+import type { DeezerTrack } from "../../src/services/deezer";
+import {
+  getLiked,
+  toggleLike,
+  pushRecent,
+  getRecent,
+} from "../../src/services/library";
+import { Colors, Typography, Spacing, Radius } from "../../src/theme/tokens";
 
-const TABS = ['Liked', 'Recent'] as const;
-type Tab = typeof TABS[number];
+const TABS = ["Liked", "Recent"] as const;
+type Tab = (typeof TABS)[number];
 
 export default function LibraryScreen() {
   const { user } = useUser();
-  const userId = user?.id ?? '';
+  const userId = user?.id ?? "";
   const { play } = usePlayer();
   const miniPlayerPadding = useMiniPlayerPadding();
-  const [activeTab, setActiveTab] = useState<Tab>('Liked');
+  const [activeTab, setActiveTab] = useState<Tab>("Liked");
   const [liked, setLiked] = useState<DeezerTrack[]>([]);
   const [recent, setRecent] = useState<DeezerTrack[]>([]);
 
@@ -29,7 +40,11 @@ export default function LibraryScreen() {
     setRecent(r);
   }, [userId]);
 
-  useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh]),
+  );
 
   const handlePlay = async (track: DeezerTrack) => {
     await play(track);
@@ -42,7 +57,7 @@ export default function LibraryScreen() {
     refresh();
   };
 
-  const list = activeTab === 'Liked' ? liked : recent;
+  const list = activeTab === "Liked" ? liked : recent;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -55,7 +70,12 @@ export default function LibraryScreen() {
               style={[styles.pill, activeTab === tab && styles.pillActive]}
               onPress={() => setActiveTab(tab)}
             >
-              <Text style={[styles.pillText, activeTab === tab && styles.pillTextActive]}>
+              <Text
+                style={[
+                  styles.pillText,
+                  activeTab === tab && styles.pillTextActive,
+                ]}
+              >
                 {tab}
               </Text>
             </TouchableOpacity>
@@ -65,22 +85,25 @@ export default function LibraryScreen() {
       <FlatList
         data={list}
         keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={[styles.list, { paddingBottom: Spacing.xl + miniPlayerPadding }]}
+        contentContainerStyle={[
+          styles.list,
+          { paddingBottom: Spacing.xl + miniPlayerPadding },
+        ]}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <Text style={styles.empty}>
-            {activeTab === 'Liked'
-              ? 'Nothing liked yet. Tap ♥ on any track.'
-              : 'No recently played tracks yet.'}
+            {activeTab === "Liked"
+              ? "Nothing liked yet. Tap ♥ on any track."
+              : "No recently played tracks yet."}
           </Text>
         }
         renderItem={({ item }) => (
           <TrackRow
             track={item}
             onPlay={handlePlay}
-            isLiked={activeTab === 'Liked' ? true : undefined}
+            isLiked={activeTab === "Liked" ? true : undefined}
             onLike={handleLike}
-            showLike={activeTab === 'Liked'}
+            showLike={activeTab === "Liked"}
           />
         )}
       />
@@ -93,12 +116,12 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg },
   title: {
     fontSize: 22,
-    fontWeight: '800',
+    fontWeight: "800",
     letterSpacing: -0.5,
     color: Colors.text,
     marginBottom: Spacing.md,
   },
-  pills: { flexDirection: 'row', gap: Spacing.xs, marginBottom: Spacing.sm },
+  pills: { flexDirection: "row", gap: Spacing.xs, marginBottom: Spacing.sm },
   pill: {
     backgroundColor: Colors.surface,
     borderRadius: Radius.full,
@@ -106,13 +129,13 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.xs,
   },
   pillActive: { backgroundColor: Colors.accent },
-  pillText: { fontSize: 11, fontWeight: '700', color: Colors.textSecondary },
+  pillText: { fontSize: 11, fontWeight: "700", color: Colors.textSecondary },
   pillTextActive: { color: Colors.white },
   list: { paddingHorizontal: Spacing.lg },
   empty: {
     ...Typography.body,
     color: Colors.textSecondary,
-    textAlign: 'center',
+    textAlign: "center",
     marginTop: Spacing.xl * 2,
   },
 });

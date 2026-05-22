@@ -1,14 +1,14 @@
 export const Colors = {
-  bg: '#f5f2ed',
-  surface: '#ede8e0',
-  muted: '#d8d0c4',
-  accent: '#3d5a6e',
-  accentDeep: '#2d4a5e',
-  text: '#18202a',
-  textSecondary: '#8a8070',
-  textMuted: '#b0a898',
-  border: '#e8e2d8',
-  white: '#fdfcfa',
+  bg: "#f5f2ed",
+  surface: "#ede8e0",
+  muted: "#d8d0c4",
+  accent: "#3d5a6e",
+  accentDeep: "#2d4a5e",
+  text: "#18202a",
+  textSecondary: "#8a8070",
+  textMuted: "#b0a898",
+  border: "#e8e2d8",
+  white: "#fdfcfa",
 } as const;
 
 export const Typography = {
@@ -37,7 +37,7 @@ export const Typography = {
     fontSize: 9,
     fontWeight: 800,
     letterSpacing: 2,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
   caption: {
     fontSize: 10,

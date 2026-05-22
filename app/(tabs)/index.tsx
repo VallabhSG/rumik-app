@@ -1,17 +1,29 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useUser } from '@clerk/clerk-expo';
-import { SectionLabel } from '../../src/components/ui/SectionLabel';
-import { TrackRow } from '../../src/components/track/TrackRow';
-import { TrackCard } from '../../src/components/track/TrackCard';
-import { usePlayer } from '../../src/services/player';
-import { getCharts, type DeezerTrack } from '../../src/services/deezer';
-import { getRecent, pushRecent, toggleLike, isLiked } from '../../src/services/library';
-import { Colors, Typography, Spacing } from '../../src/theme/tokens';
-import { useMiniPlayerPadding } from '../../src/hooks/useMiniPlayerPadding';
-import { useFeatureFlag, useExperiment } from '../../src/hooks/useRemoteConfig';
-import { Pill } from '../../src/components/ui/Pill';
+import React, { useEffect, useState } from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  ActivityIndicator,
+  TouchableOpacity,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useUser } from "@clerk/clerk-expo";
+import { SectionLabel } from "../../src/components/ui/SectionLabel";
+import { TrackRow } from "../../src/components/track/TrackRow";
+import { TrackCard } from "../../src/components/track/TrackCard";
+import { usePlayer } from "../../src/services/player";
+import { getCharts, type DeezerTrack } from "../../src/services/deezer";
+import {
+  getRecent,
+  pushRecent,
+  toggleLike,
+  isLiked,
+} from "../../src/services/library";
+import { Colors, Typography, Spacing } from "../../src/theme/tokens";
+import { useMiniPlayerPadding } from "../../src/hooks/useMiniPlayerPadding";
+import { useFeatureFlag, useExperiment } from "../../src/hooks/useRemoteConfig";
+import { Pill } from "../../src/components/ui/Pill";
 
 export default function HomeScreen() {
   const { user } = useUser();
@@ -21,15 +33,18 @@ export default function HomeScreen() {
   const [likedIds, setLikedIds] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
   const miniPlayerPadding = useMiniPlayerPadding();
-  const showGenrePills = useFeatureFlag('show_genre_pills');
-  const greetingStyle = useExperiment('home_greeting_style', 'control');
-  const chartLimit = parseInt(useExperiment('chart_limit', '8'), 10);
-  const [activeGenre, setActiveGenre] = useState<string>('All');
+  const showGenrePills = useFeatureFlag("show_genre_pills");
+  const greetingStyle = useExperiment("home_greeting_style", "control");
+  const chartLimit = parseInt(useExperiment("chart_limit", "8"), 10);
+  const [activeGenre, setActiveGenre] = useState<string>("All");
 
-  const userId = user?.id ?? '';
+  const userId = user?.id ?? "";
 
   useEffect(() => {
-    getCharts().then((tracks) => { setCharts(tracks); setLoading(false); });
+    getCharts().then((tracks) => {
+      setCharts(tracks);
+      setLoading(false);
+    });
   }, []);
 
   useEffect(() => {
@@ -48,16 +63,20 @@ export default function HomeScreen() {
     const liked = await isLiked(userId, track.id);
     setLikedIds((prev) => {
       const next = new Set(prev);
-      liked ? next.add(track.id) : next.delete(track.id);
+      if (liked) {
+        next.add(track.id);
+      } else {
+        next.delete(track.id);
+      }
       return next;
     });
   };
 
   const greeting = (() => {
     const h = new Date().getHours();
-    if (h < 12) return 'Good morning';
-    if (h < 18) return 'Good afternoon';
-    return 'Good evening';
+    if (h < 12) return "Good morning";
+    if (h < 18) return "Good afternoon";
+    return "Good evening";
   })();
 
   const featured = charts[0];
@@ -67,15 +86,24 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.safe}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.content, { paddingBottom: Spacing.xl + miniPlayerPadding }]}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: Spacing.xl + miniPlayerPadding },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>
-              {greeting}{user?.firstName ? `, ${user.firstName}` : ''}
+              {greeting}
+              {user?.firstName ? `, ${user.firstName}` : ""}
             </Text>
-            <Text style={[styles.wordmark, greetingStyle === 'bold' && styles.wordmarkBold]}>
+            <Text
+              style={[
+                styles.wordmark,
+                greetingStyle === "bold" && styles.wordmarkBold,
+              ]}
+            >
               rumik
             </Text>
           </View>
@@ -83,14 +111,19 @@ export default function HomeScreen() {
 
         {showGenrePills && (
           <View style={styles.genrePills}>
-            {['All', 'Pop', 'Hip-Hop', 'Electronic', 'R&B'].map((g) => (
-              <Pill key={g} label={g} active={activeGenre === g} />
+            {["All", "Pop", "Hip-Hop", "Electronic", "R&B"].map((g) => (
+              <TouchableOpacity key={g} onPress={() => setActiveGenre(g)}>
+                <Pill label={g} active={activeGenre === g} />
+              </TouchableOpacity>
             ))}
           </View>
         )}
 
         {loading && (
-          <ActivityIndicator color={Colors.accent} style={{ marginTop: Spacing.xl }} />
+          <ActivityIndicator
+            color={Colors.accent}
+            style={{ marginTop: Spacing.xl }}
+          />
         )}
 
         {recent.length > 0 && (
@@ -112,7 +145,11 @@ export default function HomeScreen() {
         {featured && (
           <>
             <SectionLabel>FEATURED</SectionLabel>
-            <TrackCard track={featured} onPlay={handlePlay} label="NEW RELEASE" />
+            <TrackCard
+              track={featured}
+              onPlay={handlePlay}
+              label="NEW RELEASE"
+            />
           </>
         )}
 
@@ -142,13 +179,24 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   content: { paddingHorizontal: Spacing.lg },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
     paddingTop: Spacing.lg,
   },
   greeting: { ...Typography.label, color: Colors.textSecondary },
-  wordmark: { fontSize: 28, fontWeight: '800', letterSpacing: -1, color: Colors.text, marginTop: 2 },
+  wordmark: {
+    fontSize: 28,
+    fontWeight: "800",
+    letterSpacing: -1,
+    color: Colors.text,
+    marginTop: 2,
+  },
   wordmarkBold: { fontSize: 38, letterSpacing: -2 },
-  genrePills: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: Spacing.md },
+  genrePills: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: Spacing.md,
+  },
 });

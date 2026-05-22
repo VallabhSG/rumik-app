@@ -1,6 +1,6 @@
-import React from 'react';
-import { Text, StyleSheet } from 'react-native';
-import { Colors, Typography, Spacing } from '../../theme/tokens';
+import React from "react";
+import { Text, StyleSheet } from "react-native";
+import { Colors, Typography, Spacing } from "../../theme/tokens";
 
 interface Props {
   children: string;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -9,17 +9,17 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
-} from 'react-native';
-import { useSignIn, useOAuth } from '@clerk/clerk-expo';
-import { useRouter } from 'expo-router';
-import { Colors, Typography, Spacing, Radius } from '../../src/theme/tokens';
+} from "react-native";
+import { useSignIn, useOAuth } from "@clerk/clerk-expo";
+import { useRouter } from "expo-router";
+import { Colors, Typography, Spacing, Radius } from "../../src/theme/tokens";
 
 export default function SignInScreen() {
   const { signIn, setActive, isLoaded } = useSignIn();
-  const { startOAuthFlow } = useOAuth({ strategy: 'oauth_google' });
+  const { startOAuthFlow } = useOAuth({ strategy: "oauth_google" });
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSignIn = async () => {
@@ -27,13 +27,13 @@ export default function SignInScreen() {
     setLoading(true);
     try {
       const result = await signIn.create({ identifier: email, password });
-      if (result.status === 'complete') {
+      if (result.status === "complete") {
         await setActive({ session: result.createdSessionId });
-        router.replace('/(tabs)');
+        router.replace("/(tabs)");
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Sign in failed';
-      Alert.alert('Sign in failed', msg);
+      const msg = err instanceof Error ? err.message : "Sign in failed";
+      Alert.alert("Sign in failed", msg);
     } finally {
       setLoading(false);
     }
@@ -41,19 +41,23 @@ export default function SignInScreen() {
 
   const handleGoogle = async () => {
     try {
-      const { createdSessionId, setActive: setOAuthActive } = await startOAuthFlow();
+      const { createdSessionId, setActive: setOAuthActive } =
+        await startOAuthFlow();
       if (createdSessionId && setOAuthActive) {
         await setOAuthActive({ session: createdSessionId });
-        router.replace('/(tabs)');
+        router.replace("/(tabs)");
       }
     } catch (err: unknown) {
-      Alert.alert('Google sign in failed', err instanceof Error ? err.message : 'Unknown error');
+      Alert.alert(
+        "Google sign in failed",
+        err instanceof Error ? err.message : "Unknown error",
+      );
     }
   };
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={styles.container}
     >
       <View style={styles.inner}>
@@ -79,7 +83,11 @@ export default function SignInScreen() {
           secureTextEntry
         />
 
-        <TouchableOpacity style={styles.primaryBtn} onPress={handleSignIn} disabled={loading}>
+        <TouchableOpacity
+          style={styles.primaryBtn}
+          onPress={handleSignIn}
+          disabled={loading}
+        >
           {loading ? (
             <ActivityIndicator color={Colors.white} />
           ) : (
@@ -91,10 +99,9 @@ export default function SignInScreen() {
           <Text style={styles.secondaryBtnText}>Continue with Google</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => router.push('/(auth)/sign-up')}>
+        <TouchableOpacity onPress={() => router.push("/(auth)/sign-up")}>
           <Text style={styles.link}>
-            New to rumik?{' '}
-            <Text style={styles.linkAccent}>Create account</Text>
+            New to rumik? <Text style={styles.linkAccent}>Create account</Text>
           </Text>
         </TouchableOpacity>
       </View>
@@ -104,17 +111,17 @@ export default function SignInScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
-  inner: { flex: 1, justifyContent: 'center', paddingHorizontal: Spacing.xl },
+  inner: { flex: 1, justifyContent: "center", paddingHorizontal: Spacing.xl },
   brand: {
     ...Typography.label,
     color: Colors.accent,
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: Spacing.xs,
   },
   tagline: {
     ...Typography.display,
     color: Colors.text,
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: Spacing.xl * 2,
   },
   input: {
@@ -129,21 +136,29 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.accent,
     borderRadius: Radius.md,
     padding: Spacing.md,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: Spacing.sm,
     marginBottom: Spacing.sm,
   },
-  primaryBtnText: { ...Typography.body, color: Colors.white, fontWeight: '700' },
+  primaryBtnText: {
+    ...Typography.body,
+    color: Colors.white,
+    fontWeight: "700",
+  },
   secondaryBtn: {
     backgroundColor: Colors.surface,
     borderRadius: Radius.md,
     padding: Spacing.md,
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: Spacing.lg,
     borderWidth: 1,
     borderColor: Colors.border,
   },
   secondaryBtnText: { ...Typography.body, color: Colors.text },
-  link: { ...Typography.caption, color: Colors.textSecondary, textAlign: 'center' },
-  linkAccent: { color: Colors.accent, fontWeight: '600' },
+  link: {
+    ...Typography.caption,
+    color: Colors.textSecondary,
+    textAlign: "center",
+  },
+  linkAccent: { color: Colors.accent, fontWeight: "600" },
 });

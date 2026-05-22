@@ -1,7 +1,14 @@
-import React, { createContext, useContext, useRef, useState, useCallback, useEffect } from 'react';
-import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
-import type { AudioPlayer } from 'expo-audio';
-import type { DeezerTrack } from './deezer';
+import React, {
+  createContext,
+  useContext,
+  useRef,
+  useState,
+  useCallback,
+  useEffect,
+} from "react";
+import { createAudioPlayer, setAudioModeAsync } from "expo-audio";
+import type { AudioPlayer } from "expo-audio";
+import type { DeezerTrack } from "./deezer";
 
 interface PlayerState {
   track: DeezerTrack | null;
@@ -71,7 +78,18 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <PlayerContext.Provider value={{ track, isPlaying, positionMs, durationMs, play, pause, resume, seek }}>
+    <PlayerContext.Provider
+      value={{
+        track,
+        isPlaying,
+        positionMs,
+        durationMs,
+        play,
+        pause,
+        resume,
+        seek,
+      }}
+    >
       {children}
     </PlayerContext.Provider>
   );
@@ -79,6 +97,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
 export function usePlayer(): PlayerState {
   const ctx = useContext(PlayerContext);
-  if (!ctx) throw new Error('usePlayer must be used inside PlayerProvider');
+  if (!ctx) throw new Error("usePlayer must be used inside PlayerProvider");
   return ctx;
 }
