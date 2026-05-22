@@ -1,0 +1,128 @@
+import React, { useEffect, useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, SafeAreaView } from 'react-native';
+import { useUser } from '@clerk/clerk-expo';
+import { SectionLabel } from '../../src/components/ui/SectionLabel';
+import { TrackRow } from '../../src/components/track/TrackRow';
+import { TrackCard } from '../../src/components/track/TrackCard';
+import { usePlayer } from '../../src/services/player';
+import { getCharts, type DeezerTrack } from '../../src/services/deezer';
+import { getRecent, pushRecent, toggleLike, isLiked } from '../../src/services/library';
+import { Colors, Typography, Spacing } from '../../src/theme/tokens';
+
+export default function HomeScreen() {
+  const { user } = useUser();
+  const { play } = usePlayer();
+  const [charts, setCharts] = useState<DeezerTrack[]>([]);
+  const [recent, setRecent] = useState<DeezerTrack[]>([]);
+  const [likedIds, setLikedIds] = useState<Set<number>>(new Set());
+
+  const userId = user?.id ?? '';
+
+  useEffect(() => {
+    getCharts().then(setCharts);
+  }, []);
+
+  useEffect(() => {
+    if (!userId) return;
+    getRecent(userId).then(setRecent);
+  }, [userId]);
+
+  const handlePlay = async (track: DeezerTrack) => {
+    await play(track);
+    if (userId) await pushRecent(userId, track);
+  };
+
+  const handleLike = async (track: DeezerTrack) => {
+    if (!userId) return;
+    await toggleLike(userId, track);
+    const liked = await isLiked(userId, track.id);
+    setLikedIds((prev) => {
+      const next = new Set(prev);
+      liked ? next.add(track.id) : next.delete(track.id);
+      return next;
+    });
+  };
+
+  const greeting = (() => {
+    const h = new Date().getHours();
+    if (h < 12) return 'Good morning';
+    if (h < 18) return 'Good afternoon';
+    return 'Good evening';
+  })();
+
+  const featured = charts[0];
+  const chartList = charts.slice(1, 9);
+
+  return (
+    <SafeAreaView style={styles.safe}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.greeting}>
+              {greeting}{user?.firstName ? `, ${user.firstName}` : ''}
+            </Text>
+            <Text style={styles.wordmark}>rumik</Text>
+          </View>
+        </View>
+
+        {recent.length > 0 && (
+          <>
+            <SectionLabel>RECENTLY PLAYED</SectionLabel>
+            {recent.slice(0, 5).map((track) => (
+              <TrackRow
+                key={track.id}
+                track={track}
+                onPlay={handlePlay}
+                isLiked={likedIds.has(track.id)}
+                onLike={handleLike}
+                showLike
+              />
+            ))}
+          </>
+        )}
+
+        {featured && (
+          <>
+            <SectionLabel>FEATURED</SectionLabel>
+            <TrackCard track={featured} onPlay={handlePlay} label="NEW RELEASE" />
+          </>
+        )}
+
+        {chartList.length > 0 && (
+          <>
+            <SectionLabel>CHARTS</SectionLabel>
+            {chartList.map((track, i) => (
+              <TrackRow
+                key={track.id}
+                track={track}
+                onPlay={handlePlay}
+                rank={i + 2}
+                isLiked={likedIds.has(track.id)}
+                onLike={handleLike}
+                showLike
+              />
+            ))}
+          </>
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: Colors.bg },
+  scroll: { flex: 1 },
+  content: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xl },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingTop: Spacing.lg,
+  },
+  greeting: { ...Typography.label, color: Colors.textSecondary },
+  wordmark: { fontSize: 28, fontWeight: '800', letterSpacing: -1, color: Colors.text, marginTop: 2 },
+});
