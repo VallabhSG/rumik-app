@@ -79,3 +79,4 @@ ota-server/.env.*
 
 # Brainstorming sessions
 .superpowers/
+package-lock.json
