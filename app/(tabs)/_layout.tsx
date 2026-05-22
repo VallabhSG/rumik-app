@@ -2,15 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Tabs, useRouter } from 'expo-router';
 import { useAuth, useUser } from '@clerk/clerk-expo';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MiniPlayer } from '../../src/components/player/MiniPlayer';
 import { NowPlaying } from '../../src/components/player/NowPlaying';
 import { Colors } from '../../src/theme/tokens';
 import { configClientRef } from '../../src/utils/configClientRef';
 
+const TAB_BAR_HEIGHT = 49;
+
 export default function TabsLayout() {
   const { isSignedIn, isLoaded } = useAuth();
   const { user } = useUser();
   const router = useRouter();
+  const { bottom } = useSafeAreaInsets();
   const [nowPlayingVisible, setNowPlayingVisible] = useState(false);
 
   useEffect(() => {
@@ -55,7 +59,12 @@ export default function TabsLayout() {
           options={{ title: 'Profile', tabBarIcon: ({ color }) => <TabIcon label="👤" color={color} /> }}
         />
       </Tabs>
-      <MiniPlayer onExpand={() => setNowPlayingVisible(true)} />
+
+      {/* Absolutely positioned above the tab bar */}
+      <View style={[styles.miniPlayerWrapper, { bottom: TAB_BAR_HEIGHT + bottom }]}>
+        <MiniPlayer onExpand={() => setNowPlayingVisible(true)} />
+      </View>
+
       <NowPlaying visible={nowPlayingVisible} onClose={() => setNowPlayingVisible(false)} />
     </View>
   );
@@ -76,5 +85,10 @@ const styles = StyleSheet.create({
     borderTopColor: Colors.border,
     borderTopWidth: 1,
     elevation: 0,
+  },
+  miniPlayerWrapper: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
   },
 });
