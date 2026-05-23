@@ -13,7 +13,11 @@ import { SectionLabel } from "../../src/components/ui/SectionLabel";
 import { TrackRow } from "../../src/components/track/TrackRow";
 import { TrackCard } from "../../src/components/track/TrackCard";
 import { usePlayer } from "../../src/services/player";
-import { getCharts, type DeezerTrack } from "../../src/services/deezer";
+import {
+  getCharts,
+  searchTracks,
+  type DeezerTrack,
+} from "../../src/services/deezer";
 import {
   getRecent,
   pushRecent,
@@ -24,6 +28,14 @@ import { Colors, Typography, Spacing } from "../../src/theme/tokens";
 import { useMiniPlayerPadding } from "../../src/hooks/useMiniPlayerPadding";
 import { useFeatureFlag, useExperiment } from "../../src/hooks/useRemoteConfig";
 import { Pill } from "../../src/components/ui/Pill";
+
+const GENRE_QUERIES: Record<string, string> = {
+  All: "",
+  Pop: "top pop hits",
+  "Hip-Hop": "top hip hop",
+  Electronic: "top electronic",
+  "R&B": "top r&b soul",
+};
 
 export default function HomeScreen() {
   const { user } = useUser();
@@ -41,11 +53,19 @@ export default function HomeScreen() {
   const userId = user?.id ?? "";
 
   useEffect(() => {
-    getCharts().then((tracks) => {
+    const query = GENRE_QUERIES[activeGenre];
+    const fetchFn = query ? searchTracks(query, 20) : getCharts();
+    fetchFn.then((tracks) => {
       setCharts(tracks);
       setLoading(false);
     });
-  }, []);
+  }, [activeGenre]);
+
+  const handleGenreSelect = (genre: string) => {
+    if (genre === activeGenre) return;
+    setActiveGenre(genre);
+    setLoading(true);
+  };
 
   useEffect(() => {
     if (!userId) return;
@@ -112,7 +132,7 @@ export default function HomeScreen() {
         {showGenrePills && (
           <View style={styles.genrePills}>
             {["All", "Pop", "Hip-Hop", "Electronic", "R&B"].map((g) => (
-              <TouchableOpacity key={g} onPress={() => setActiveGenre(g)}>
+              <TouchableOpacity key={g} onPress={() => handleGenreSelect(g)}>
                 <Pill label={g} active={activeGenre === g} />
               </TouchableOpacity>
             ))}
