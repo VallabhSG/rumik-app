@@ -88,7 +88,7 @@ router.post('/', (req, res) => {
     throw err;
   }
 
-  logChange('experiment', id, 'created', null);
+  logChange('experiment', id, 'created', null, res.locals.actor as string);
   const row = db.prepare('SELECT * FROM experiments WHERE id = ?').get(id) as ExperimentRow;
   return res.status(201).json({ success: true, data: parseExperiment(row) });
 });
@@ -119,7 +119,7 @@ router.patch('/:id', (req, res) => {
   logChange('experiment', req.params.id, 'updated', diffObjects(
     { status: existing.status, variants: existing.variants, targeting: existing.targeting },
     { status: updated.status, variants: updated.variants, targeting: updated.targeting },
-  ));
+  ), res.locals.actor as string);
   return res.json({ success: true, data: parseExperiment(updated) });
 });
 
@@ -129,7 +129,7 @@ router.delete('/:id', (req, res) => {
   if (!existing) return res.status(404).json({ success: false, error: 'Experiment not found' });
 
   db.prepare('DELETE FROM experiments WHERE id = ?').run(req.params.id);
-  logChange('experiment', req.params.id, 'deleted', null);
+  logChange('experiment', req.params.id, 'deleted', null, res.locals.actor as string);
   return res.json({ success: true, data: null });
 });
 
