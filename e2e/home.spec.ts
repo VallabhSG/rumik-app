@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Home Screen @smoke', () => {
+test.describe('App Shell @smoke', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     // domcontentloaded only — networkidle hangs because the app makes background
@@ -11,22 +11,20 @@ test.describe('Home Screen @smoke', () => {
   });
 
   test('loads and shows rumik branding', async ({ page }) => {
-    // Use toContainText on body — more resilient than toBeVisible for RN Web
-    // where elements may have no bounding box in certain viewport/headless configs
     await expect(page.locator('body')).toContainText('rumik', { timeout: 10000 });
   });
 
-  test('shows feel the music tagline', async ({ page }) => {
+  test('shows feel the music tagline on sign-in screen', async ({ page }) => {
     await expect(page.locator('body')).toContainText('feel the music', { timeout: 10000 });
   });
 
-  test('shows Discover and Library cards', async ({ page }) => {
-    await expect(page.locator('body')).toContainText('Discover', { timeout: 10000 });
-    await expect(page.locator('body')).toContainText('Library', { timeout: 10000 });
+  test('shows sign-in form with email and password fields', async ({ page }) => {
+    await expect(page.locator('body')).toContainText('Sign in', { timeout: 10000 });
+    await expect(page.locator('body')).toContainText('Email', { timeout: 10000 });
   });
 
-  test('shows recently played section', async ({ page }) => {
-    await expect(page.locator('body')).toContainText('Recently Played', { timeout: 10000 });
-    await expect(page.locator('body')).toContainText('Neon Drift', { timeout: 10000 });
+  test('shows Google OAuth and create account options', async ({ page }) => {
+    await expect(page.locator('body')).toContainText('Continue with Google', { timeout: 10000 });
+    await expect(page.locator('body')).toContainText('Create account', { timeout: 10000 });
   });
 });
