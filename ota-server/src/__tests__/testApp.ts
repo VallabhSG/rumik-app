@@ -97,6 +97,10 @@ export function createTestDb(): Database.Database {
     );
     CREATE INDEX IF NOT EXISTS idx_error_events_group    ON error_events(group_id, recorded_at);
     CREATE INDEX IF NOT EXISTS idx_error_events_recorded ON error_events(recorded_at);
+    CREATE TABLE IF NOT EXISTS segments (
+      id TEXT PRIMARY KEY, key TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+      description TEXT, rules TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+    );
   `);
 
   return db;
