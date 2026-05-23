@@ -15,6 +15,8 @@ import {
   useDynamicUrl,
 } from "../hooks/useRemoteConfig";
 import { useOta } from "../contexts/OtaContext";
+import { useFlag } from "../contexts/RemoteConfigContext";
+import { PremiumUpsellCard } from "../components/PremiumUpsellCard";
 
 interface Props {
   onNavigate?: (screen: string) => void;
@@ -34,6 +36,7 @@ export default function HomeScreen({ onNavigate }: Props) {
   const taglineVariant = useExperiment("tagline_test", "control");
   const apiUrl = useDynamicUrl("api_base_url", "https://api.rumik.app/v1");
   const checkoutKilled = useKillSwitch("checkout");
+  const showPremiumUpsell = useFlag("show_premium_upsell");
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
@@ -101,6 +104,15 @@ export default function HomeScreen({ onNavigate }: Props) {
             </View>
           </TouchableOpacity>
         </View>
+
+        {/* ── Feature flag: premium upsell ────────────────────────────────── */}
+        {showPremiumUpsell && (
+          <PremiumUpsellCard
+            onUpgrade={() => {
+              /* TODO: navigate to upgrade */
+            }}
+          />
+        )}
 
         {/* ── Feature flag: new onboarding ────────────────────────────────── */}
         {showNewOnboarding && (
