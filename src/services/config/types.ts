@@ -23,6 +23,13 @@ export interface ConfigClientOptions {
 
 export type ConfigStatus = "loading" | "ready" | "error" | "stale";
 
+export interface UserContext {
+  userId?: string;
+  plan?: string;
+  email_domain?: string;
+  account_age_days?: number;
+}
+
 export interface WsMessage {
   type: "authenticated" | "kill_switch" | "ping";
   key?: string;
