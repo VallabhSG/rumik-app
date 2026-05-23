@@ -28,7 +28,7 @@ export function createTestDb(): Database.Database {
     );
     CREATE TABLE IF NOT EXISTS kill_switches (
       id TEXT PRIMARY KEY, key TEXT NOT NULL UNIQUE, active INTEGER NOT NULL DEFAULT 0,
-      reason TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      reason TEXT, targeting TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS audit_log (
       id TEXT PRIMARY KEY, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL,
