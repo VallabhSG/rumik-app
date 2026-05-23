@@ -101,6 +101,16 @@ export function createTestDb(): Database.Database {
       id TEXT PRIMARY KEY, key TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
       description TEXT, rules TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS experiment_exposures (
+      id TEXT PRIMARY KEY, experiment_id TEXT NOT NULL, install_id TEXT NOT NULL,
+      user_id TEXT, variant_id TEXT NOT NULL, exposed_at TEXT NOT NULL,
+      UNIQUE (experiment_id, install_id)
+    );
+    CREATE TABLE IF NOT EXISTS experiment_conversions (
+      id TEXT PRIMARY KEY, experiment_id TEXT NOT NULL, install_id TEXT NOT NULL,
+      user_id TEXT, variant_id TEXT NOT NULL, event_name TEXT NOT NULL,
+      value REAL NOT NULL DEFAULT 1, converted_at TEXT NOT NULL
+    );
   `);
 
   return db;
