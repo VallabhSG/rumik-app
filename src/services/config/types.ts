@@ -36,3 +36,15 @@ export interface WsMessage {
   active?: boolean;
   reason?: string | null;
 }
+
+export interface ExperimentAssignment {
+  variant_id: string;
+  experiment_key: string;
+}
+
+export interface ConfigPayload {
+  flags: Record<string, boolean>;
+  remote_urls: Record<string, string>;
+  experiments: Record<string, ExperimentAssignment>;
+  kill_switches: string[];
+}

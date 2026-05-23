@@ -141,6 +141,42 @@ export class ConfigClient {
     await this.fetchAndUpdate();
   }
 
+  async trackExposure(
+    experimentKey: string,
+    body: { install_id: string; variant_id: string; user_id?: string },
+  ): Promise<void> {
+    if (!this.options.serverUrl) return;
+    await fetch(
+      `${this.options.serverUrl}/api/experiments/${experimentKey}/expose`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
+  }
+
+  async trackConversion(
+    experimentKey: string,
+    body: {
+      install_id: string;
+      variant_id: string;
+      event_name: string;
+      value?: number;
+      user_id?: string;
+    },
+  ): Promise<void> {
+    if (!this.options.serverUrl) return;
+    await fetch(
+      `${this.options.serverUrl}/api/experiments/${experimentKey}/convert`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // Internal
   // ---------------------------------------------------------------------------
