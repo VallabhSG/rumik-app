@@ -76,3 +76,7 @@ ota-server/.env.*
 
 # Turborepo
 .turbo
+
+# Brainstorming sessions
+.superpowers/
+package-lock.json

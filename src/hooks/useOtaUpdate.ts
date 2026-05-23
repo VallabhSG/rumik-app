@@ -1,8 +1,18 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Platform, AppState, type AppStateStatus } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Application from "expo-application";
 import { OtaClient } from "../services/ota/OtaClient";
 import type { OtaConfig, UpdateStatus } from "../services/ota/types";
+
+// Keys that accumulate crash/session data — clear them in dev so stale debug
+// crashes don't poison the crash-rate heuristic on the next production build.
+const DEV_CLEAR_KEYS = [
+  "ota:session_open",
+  "ota:launch_records",
+  "ota:current_version",
+  "ota:previous_version",
+];
 
 function buildConfig(): OtaConfig {
   return {
@@ -63,13 +73,14 @@ export function useOtaUpdate(): OtaUpdateState {
     // OTA updates only make sense on native platforms
     if (Platform.OS === "web") return;
 
+    // In development, skip OTA entirely and wipe stale crash data so debug
+    // session crashes don't affect the crash-rate heuristic in production.
+    if (__DEV__) {
+      AsyncStorage.multiRemove(DEV_CLEAR_KEYS).catch(() => {});
+      return;
+    }
+
     const config = buildConfig();
-    console.log(
-      "[OTA] serverUrl:",
-      config.serverUrl,
-      "platform:",
-      config.platform,
-    );
     if (!config.serverUrl) return; // not configured in this environment
 
     const client = new OtaClient(config, (s) => {

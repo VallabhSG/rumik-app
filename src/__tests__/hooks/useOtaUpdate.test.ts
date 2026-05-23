@@ -1,6 +1,10 @@
 import { renderHook, act } from "@testing-library/react-native";
 import { useOtaUpdate } from "../../hooks/useOtaUpdate";
 
+// OTA tests run in a simulated production context — disable the __DEV__ guard
+// so the hook initializes the OTA client as it would in a production build.
+(global as unknown as Record<string, unknown>).__DEV__ = false;
+
 // --- Module mocks ---
 
 const mockInitialize = jest.fn().mockResolvedValue(undefined);

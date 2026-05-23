@@ -31,7 +31,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Prettier check
-        run: npx prettier --check "src/**/*.{ts,tsx}" "App.tsx"
+        run: npx prettier --check "src/**/*.{ts,tsx}" "app/**/*.{ts,tsx}"
 
   # ── Type Checking ────────────────────────────────────────────────────────────
   typecheck:
@@ -158,7 +158,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Lint
-        run: npx eslint "src/**/*.{ts,tsx}" "App.tsx" --max-warnings 0
+        run: npx eslint "src/**/*.{ts,tsx}" "app/**/*.{ts,tsx}" --max-warnings 0
 
   # ── Secret Scanning ──────────────────────────────────────────────────────────
   secret-scan:

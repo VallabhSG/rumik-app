@@ -2,23 +2,17 @@
 name: rumik
 description: A music discovery and listening app for quality-first listeners
 colors:
-  void-ash: "#0a0a0f"
-  deep-listening-surface: "#0d0d14"
-  evening-card: "#1a1a2e"
-  midnight-card: "#1e1b4b"
-  night-cave: "#0f172a"
-  violet-signal: "#7c3aed"
-  electric-blue: "#3b82f6"
-  sky-blue: "#60a5fa"
-  mist-blue: "#93c5fd"
-  indigo-action: "#6366f1"
-  slate-muted: "#4b5563"
-  slate-secondary: "#6b7280"
-  slate-tertiary: "#9ca3af"
-  ghost-lavender: "#e0e7ff"
-  crimson-alert: "#7f1d1d"
-  crimson-border: "#ef4444"
-  crimson-soft: "#fca5a5"
+  bg: "#f5f2ed"
+  surface: "#ede8e0"
+  muted: "#d8d0c4"
+  accent: "#3d5a6e"
+  accent-deep: "#2d4a5e"
+  text: "#18202a"
+  text-secondary: "#8a8070"
+  text-muted: "#b0a898"
+  border: "#e8e2d8"
+  white: "#fdfcfa"
+theme: light
 typography:
   display:
     fontFamily: "System (SF Pro Display / Roboto)"

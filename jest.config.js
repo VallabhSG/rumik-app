@@ -17,9 +17,23 @@ module.exports = {
   ],
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
-    'App.tsx',
     '!src/**/*.d.ts',
     '!src/**/__tests__/**',
+    // Platform-specific wrappers that require device APIs — not unit-testable
+    '!src/utils/tokenCache.ts',
+    // Simple ref exports with no testable logic
+    '!src/utils/configClientRef.ts',
+    // Trivial single-line hooks
+    '!src/hooks/useMiniPlayerPadding.ts',
+    // UI-only player components — tested via E2E, not unit tests
+    '!src/components/player/MiniPlayer.tsx',
+    '!src/components/player/NowPlaying.tsx',
+    // UI-only track components without testable logic
+    '!src/components/track/TrackCard.tsx',
+    // Thin context wrappers over hooks — covered by hook tests
+    '!src/contexts/OtaContext.tsx',
+    // Type-only files
+    '!src/services/config/types.ts',
   ],
   coverageThreshold: {
     global: {
