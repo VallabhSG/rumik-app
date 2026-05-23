@@ -183,7 +183,7 @@ router.get('/:key/results', (req, res) => {
 
   const variantStats = variants.map(v => {
     const exposures = (db.prepare(
-      'SELECT COUNT(*) as cnt FROM experiment_exposures WHERE experiment_id = ? AND variant_id = ?'
+      'SELECT COUNT(DISTINCT install_id) as cnt FROM experiment_exposures WHERE experiment_id = ? AND variant_id = ?'
     ).get(exp.id, v.id) as { cnt: number }).cnt;
     const conversions = (db.prepare(
       'SELECT COUNT(DISTINCT install_id) as cnt FROM experiment_conversions WHERE experiment_id = ? AND variant_id = ?'
