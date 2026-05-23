@@ -55,6 +55,62 @@ function recordRollback(releaseId: string, version: string, channel: string, rea
   `).run(uuid(), previous?.version ?? 'unknown', version, reason, channel, now);
 }
 
+// ── Flag schedule execution ───────────────────────────────────────────────────
+
+interface PendingSchedule {
+  id: string;
+  entity_type: string;
+  entity_id: string;
+  action: string;
+  payload: string | null;
+  scheduled_at: string;
+}
+
+function processSchedules(): void {
+  const pending = db.prepare(`
+    SELECT id, entity_type, entity_id, action, payload, scheduled_at
+    FROM flag_schedules
+    WHERE scheduled_at <= datetime('now') AND executed_at IS NULL
+  `).all() as PendingSchedule[];
+
+  if (pending.length === 0) return;
+
+  for (const schedule of pending) {
+    const { id, entity_type, action, entity_id, payload: rawPayload } = schedule;
+
+    try {
+      if (entity_type === 'flag') {
+        if (action === 'activate') {
+          db.prepare('UPDATE feature_flags SET enabled = 1 WHERE id = ?').run(entity_id);
+        } else if (action === 'deactivate') {
+          db.prepare('UPDATE feature_flags SET enabled = 0 WHERE id = ?').run(entity_id);
+        } else if (action === 'update_targeting') {
+          const payload = rawPayload ? JSON.parse(rawPayload) : {};
+          const targeting = JSON.stringify(payload.targeting ?? {});
+          db.prepare('UPDATE feature_flags SET targeting = ? WHERE id = ?').run(targeting, entity_id);
+        }
+      } else if (entity_type === 'experiment') {
+        if (action === 'activate') {
+          db.prepare("UPDATE experiments SET status = 'active' WHERE id = ?").run(entity_id);
+        } else if (action === 'complete') {
+          db.prepare("UPDATE experiments SET status = 'completed' WHERE id = ?").run(entity_id);
+        }
+      } else if (entity_type === 'kill_switch') {
+        if (action === 'activate') {
+          db.prepare('UPDATE kill_switches SET active = 1 WHERE id = ?').run(entity_id);
+        } else if (action === 'deactivate') {
+          db.prepare('UPDATE kill_switches SET active = 0 WHERE id = ?').run(entity_id);
+        }
+      }
+
+      db.prepare("UPDATE flag_schedules SET executed_at = datetime('now') WHERE id = ?").run(id);
+      console.log('[scheduler] executed schedule', id, entity_type, action);
+    } catch (err) {
+      logger.error({ err, scheduleId: id, entity_type, action }, 'scheduler: failed to execute schedule');
+    }
+  }
+}
+
 // ── Main tick ─────────────────────────────────────────────────────────────────
 
 interface ActiveRelease {
@@ -67,6 +123,8 @@ interface ActiveRelease {
 }
 
 function tick(): void {
+  processSchedules();
+
   const releases = db.prepare(`
     SELECT id, version, channel, rollout_percentage, rollout_advanced_at, created_at
     FROM releases

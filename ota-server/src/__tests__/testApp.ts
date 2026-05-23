@@ -111,6 +111,17 @@ export function createTestDb(): Database.Database {
       user_id TEXT, variant_id TEXT NOT NULL, event_name TEXT NOT NULL,
       value REAL NOT NULL DEFAULT 1, converted_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS flag_schedules (
+      id TEXT PRIMARY KEY,
+      entity_type TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      action TEXT NOT NULL,
+      payload TEXT,
+      scheduled_at TEXT NOT NULL,
+      executed_at TEXT,
+      created_by TEXT NOT NULL DEFAULT 'system',
+      created_at TEXT NOT NULL
+    );
   `);
 
   return db;
