@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useSyncExternalStore } from "react";
+import React, { createContext, useCallback, useContext, useRef, useSyncExternalStore } from "react";
 import { useRemoteConfigClient } from "../hooks/useRemoteConfig";
 import type { ConfigPayload, ExperimentAssignment, UserContext } from "../services/config/types";
 
@@ -70,9 +70,25 @@ function toConfigPayload(client: ReturnType<typeof useRemoteConfigClient>): Conf
 export function RemoteConfigPayloadProvider({ children }: { children: React.ReactNode }) {
   const client = useRemoteConfigClient();
 
+  // useSyncExternalStore requires getSnapshot to return a stable reference when
+  // the store hasn't changed. toConfigPayload always constructs a new object, so
+  // we cache the last raw config reference and only recompute when it changes.
+  const lastRawRef = useRef<object | null>(null);
+  const lastPayloadRef = useRef<ConfigPayload>(defaultConfig);
+
+  const getSnapshot = useCallback((): ConfigPayload => {
+    const raw = (client as unknown as { config: object }).config;
+    if (raw !== null && raw === lastRawRef.current) {
+      return lastPayloadRef.current;
+    }
+    lastRawRef.current = raw;
+    lastPayloadRef.current = toConfigPayload(client);
+    return lastPayloadRef.current;
+  }, [client]);
+
   const config = useSyncExternalStore(
     (onStoreChange) => client.subscribe(onStoreChange),
-    () => toConfigPayload(client),
+    getSnapshot,
     () => defaultConfig,
   );
 
