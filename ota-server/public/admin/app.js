@@ -254,6 +254,7 @@ async function loadExperiments() {
           <td>${fmtDate(e.updated_at)}</td>
           <td>
             <button class="btn btn-ghost" onclick="editExperiment('${e.id}')">Edit</button>
+            <button class="btn btn-ghost" onclick="resetExperimentAssignments('${esc(e.key)}')">Reset Assignments</button>
             <button class="btn btn-danger" onclick="deleteExperiment('${e.id}', '${esc(e.key)}')">Delete</button>
           </td>
         </tr>`;
@@ -318,6 +319,20 @@ window.deleteExperiment = async function(id, key) {
   if (!res?.confirmed) return;
   try { await del(`/experiments/${id}`); toast('Experiment deleted'); loadExperiments(); }
   catch (e) { toast(e.message, 'error'); }
+};
+
+window.resetExperimentAssignments = async function(key) {
+  const res = await openModal(
+    'Reset Assignments',
+    `<p>Clear all stored variant assignments for <code>${esc(key)}</code>?</p>
+     <p style="margin-top:8px;color:var(--text-muted);font-size:13px">Every device will be re-bucketed on their next config fetch based on the current weights.</p>`,
+    'Reset'
+  );
+  if (!res?.confirmed) return;
+  try {
+    const { data } = await del(`/experiments/${encodeURIComponent(key)}/assignments`);
+    toast(`Assignments cleared — ${data.deleted} row${data.deleted !== 1 ? 's' : ''} removed`, 'success');
+  } catch (e) { toast(e.message, 'error'); }
 };
 
 document.getElementById('btn-add-experiment').onclick = () => window.editExperiment(null);
