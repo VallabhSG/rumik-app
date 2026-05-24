@@ -57,7 +57,7 @@ export default function ProfileScreen() {
   };
 
   const version = Constants.expoConfig?.version ?? "—";
-  const plan = (user?.publicMetadata?.plan as string | undefined) ?? "free";
+  const plan = ((user?.publicMetadata?.plan as string | undefined) ?? "free").toLowerCase();
   const memberSince = user?.createdAt
     ? new Date(user.createdAt).toLocaleDateString(undefined, {
         month: "short",

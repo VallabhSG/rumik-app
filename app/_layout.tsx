@@ -29,7 +29,7 @@ const otaServerUrl = resolveOtaServerUrl();
 function ClerkUserBridge() {
   const { user } = useUser();
   const client = useRemoteConfigClient();
-  const plan = (user?.publicMetadata?.plan as string | undefined) ?? "free";
+  const plan = ((user?.publicMetadata?.plan as string | undefined) ?? "free").toLowerCase();
 
   useEffect(() => {
     if (!user) return;

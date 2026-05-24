@@ -42,9 +42,9 @@ export function evaluateAttributeRule(rule: AttributeRule, user: UserContext): b
   if (val === undefined || val === null) return false;
   switch (rule.operator) {
     case 'eq':
-      return String(val) === String(rule.value);
+      return String(val).toLowerCase() === String(rule.value).toLowerCase();
     case 'neq':
-      return String(val) !== String(rule.value);
+      return String(val).toLowerCase() !== String(rule.value).toLowerCase();
     case 'gt':
       return Number(val) > Number(rule.value);
     case 'lt':
