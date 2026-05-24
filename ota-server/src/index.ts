@@ -143,11 +143,18 @@ function seedDemoData(): void {
     `);
 
     // Feature flags (table is feature_flags; columns: id, key, enabled, description, targeting, created_at, updated_at)
+    // show_premium_upsell uses ON CONFLICT DO UPDATE to always keep targeting correct
     db.exec(`
-      INSERT OR IGNORE INTO feature_flags (id, key, enabled, description, targeting, created_at, updated_at) VALUES
+      INSERT INTO feature_flags (id, key, enabled, description, targeting, created_at, updated_at) VALUES
         ('flag-001', 'show_premium_upsell', 1, 'Shows upsell card to free users',
          '{"platforms":["ios","android"],"user_attribute_rules":[{"attribute":"plan","operator":"neq","value":"premium"}]}',
-         datetime('now'), datetime('now')),
+         datetime('now'), datetime('now'))
+      ON CONFLICT(id) DO UPDATE SET
+        targeting = '{"platforms":["ios","android"],"user_attribute_rules":[{"attribute":"plan","operator":"neq","value":"premium"}]}',
+        updated_at = datetime('now')
+    `);
+    db.exec(`
+      INSERT OR IGNORE INTO feature_flags (id, key, enabled, description, targeting, created_at, updated_at) VALUES
         ('flag-002', 'enable_social_share', 1, 'Share tracks to social media',
          NULL, datetime('now'), datetime('now')),
         ('flag-003', 'enable_offline_mode', 0, 'Download tracks for offline playback',
