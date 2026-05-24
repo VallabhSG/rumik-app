@@ -15,7 +15,7 @@ import { usePlayer } from "../../services/player";
 import { useUser } from "@clerk/clerk-expo";
 import { toggleLike, isLiked as checkIsLiked } from "../../services/library";
 import { Colors, Typography, Spacing, Radius } from "../../theme/tokens";
-import { useFlag } from "../../contexts/RemoteConfigContext";
+import { useFlag, useExperimentVariant } from "../../contexts/RemoteConfigContext";
 
 const { width } = Dimensions.get("window");
 
@@ -31,6 +31,8 @@ export function NowPlaying({ visible, onClose }: Props) {
   const [liked, setLiked] = useState(false);
   const enableLyricsLink = useFlag("enable_lyrics_link");
   const enableOfflineMode = useFlag("enable_offline_mode");
+  const playerUiVariant = useExperimentVariant("player_ui");
+  const isImmersive = playerUiVariant === "immersive";
 
   useEffect(() => {
     if (track && user?.id) {
@@ -63,10 +65,10 @@ export function NowPlaying({ visible, onClose }: Props) {
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={styles.container} {...panResponder.panHandlers}>
+      <View style={[styles.container, isImmersive && styles.containerImmersive]} {...panResponder.panHandlers}>
         <View style={styles.handle} />
 
-        <Image source={{ uri: track.album.cover_medium }} style={styles.art} />
+        <Image source={{ uri: track.album.cover_medium }} style={[styles.art, isImmersive && styles.artImmersive]} />
 
         <View style={styles.info}>
           <Text style={styles.title}>{track.title}</Text>
@@ -186,6 +188,16 @@ const styles = StyleSheet.create({
   artist: { ...Typography.body, color: Colors.textSecondary, marginTop: 4 },
   album: { ...Typography.caption, color: Colors.textMuted, marginTop: 2 },
   lyricsLink: { color: "#6C3CF7", fontSize: 14, marginTop: 8 },
+  containerImmersive: {
+    backgroundColor: "#000000",
+  },
+  artImmersive: {
+    width: width * 0.88,
+    height: width * 0.88,
+    borderRadius: 24,
+    shadowOpacity: 0.45,
+    shadowRadius: 40,
+  },
   scrubberTrack: {
     height: 4,
     backgroundColor: Colors.muted,

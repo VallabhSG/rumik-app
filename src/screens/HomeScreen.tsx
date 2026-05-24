@@ -15,7 +15,7 @@ import {
   useDynamicUrl,
 } from "../hooks/useRemoteConfig";
 import { useOta } from "../contexts/OtaContext";
-import { useFlag } from "../contexts/RemoteConfigContext";
+import { useFlag, useExperimentVariant } from "../contexts/RemoteConfigContext";
 import { PremiumUpsellCard } from "../components/PremiumUpsellCard";
 
 interface Props {
@@ -37,6 +37,7 @@ export default function HomeScreen({ onNavigate }: Props) {
   const apiUrl = useDynamicUrl("api_base_url", "https://api.rumik.app/v1");
   const checkoutKilled = useKillSwitch("checkout");
   const showPremiumUpsell = useFlag("show_premium_upsell");
+  const homeLayoutVariant = useExperimentVariant("home_layout");
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
@@ -76,6 +77,20 @@ export default function HomeScreen({ onNavigate }: Props) {
           </Text>
         </View>
 
+        {/* ── home_layout experiment: control = cards→upsell→recent, grid = recent→cards→upsell, horizontal = upsell→recent→cards ── */}
+        {homeLayoutVariant === "horizontal" && showPremiumUpsell && (
+          <PremiumUpsellCard onUpgrade={() => { /* TODO: navigate to upgrade */ }} />
+        )}
+
+        {homeLayoutVariant === "grid" && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Recently Played</Text>
+            {RECENT_TRACKS.map((track) => (
+              <TrackRow key={track.id} track={track} />
+            ))}
+          </View>
+        )}
+
         {/* ── Navigation cards ────────────────────────────────────────────── */}
         <View style={styles.cards}>
           <TouchableOpacity
@@ -105,13 +120,9 @@ export default function HomeScreen({ onNavigate }: Props) {
           </TouchableOpacity>
         </View>
 
-        {/* ── Feature flag: premium upsell ────────────────────────────────── */}
-        {showPremiumUpsell && (
-          <PremiumUpsellCard
-            onUpgrade={() => {
-              /* TODO: navigate to upgrade */
-            }}
-          />
+        {/* ── Feature flag: premium upsell (control + grid variants) ──────── */}
+        {homeLayoutVariant !== "horizontal" && showPremiumUpsell && (
+          <PremiumUpsellCard onUpgrade={() => { /* TODO: navigate to upgrade */ }} />
         )}
 
         {/* ── Feature flag: new onboarding ────────────────────────────────── */}
@@ -145,13 +156,15 @@ export default function HomeScreen({ onNavigate }: Props) {
           </View>
         )}
 
-        {/* ── Recently played ──────────────────────────────────────────────── */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recently Played</Text>
-          {RECENT_TRACKS.map((track) => (
-            <TrackRow key={track.id} track={track} />
-          ))}
-        </View>
+        {/* ── Recently played (control + horizontal variants) ──────────────── */}
+        {homeLayoutVariant !== "grid" && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Recently Played</Text>
+            {RECENT_TRACKS.map((track) => (
+              <TrackRow key={track.id} track={track} />
+            ))}
+          </View>
+        )}
 
         {/* ── API config row ───────────────────────────────────────────────── */}
         <View style={styles.configRow} testID="config-api-url">
