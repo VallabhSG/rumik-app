@@ -133,6 +133,17 @@ router.delete('/:id', (req, res) => {
   return res.json({ success: true, data: null });
 });
 
+// DELETE /api/experiments/:key/assignments — clears all stored variant assignments so
+// the next config fetch re-bucketes everyone against the current weights. Dev/testing only.
+router.delete('/:key/assignments', (req, res) => {
+  const exp = db.prepare('SELECT id FROM experiments WHERE key = ?').get(req.params.key) as { id: string } | undefined;
+  if (!exp) return void res.status(404).json({ success: false, error: 'Experiment not found' });
+
+  const result = db.prepare('DELETE FROM experiment_assignments WHERE experiment_id = ?').run(exp.id);
+  logChange('experiment', exp.id, 'assignments_cleared', null, res.locals.actor as string);
+  return void res.json({ success: true, data: { deleted: result.changes } });
+});
+
 const ExposeSchema = z.object({
   install_id: z.string().min(1),
   user_id: z.string().optional(),
