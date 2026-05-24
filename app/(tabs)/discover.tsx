@@ -21,11 +21,13 @@ import {
 import { pushRecent, toggleLike, isLiked } from "../../src/services/library";
 import { Colors, Typography, Spacing, Radius } from "../../src/theme/tokens";
 import { useKillSwitch } from "../../src/hooks/useRemoteConfig";
+import { useExperimentVariant } from "../../src/contexts/RemoteConfigContext";
 
 export default function DiscoverScreen() {
   const { play } = usePlayer();
   const miniPlayerPadding = useMiniPlayerPadding();
   const searchDisabled = useKillSwitch("disable_search");
+  const searchPromptVariant = useExperimentVariant("search_prompt_copy");
   const { user } = useUser();
   const userId = user?.id ?? "";
   const [query, setQuery] = useState("");
@@ -92,7 +94,11 @@ export default function DiscoverScreen() {
           <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
             style={styles.searchInput}
-            placeholder="Search artists, tracks…"
+            placeholder={
+              searchPromptVariant === "variant_a"
+                ? "What are you feeling like?"
+                : "Search artists, tracks…"
+            }
             placeholderTextColor={Colors.textSecondary}
             value={query}
             onChangeText={handleSearch}

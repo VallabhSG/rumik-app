@@ -70,7 +70,7 @@ router.post('/', (req, res) => {
     throw err;
   }
 
-  logChange('kill_switch', id, 'created', null);
+  logChange('kill_switch', id, 'created', null, res.locals.actor as string);
   const row = db.prepare('SELECT * FROM kill_switches WHERE id = ?').get(id) as KillSwitchRow;
   return res.status(201).json({ success: true, data: parseKillSwitch(row) });
 });
@@ -95,7 +95,7 @@ router.patch('/:id', (req, res) => {
   logChange('kill_switch', req.params.id, 'updated', diffObjects(
     { reason: existing.reason },
     { reason: updated.reason },
-  ));
+  ), res.locals.actor as string);
   return res.json({ success: true, data: parseKillSwitch(updated) });
 });
 
@@ -108,7 +108,7 @@ router.post('/:id/activate', (req, res) => {
   db.prepare('UPDATE kill_switches SET active = 1, updated_at = ? WHERE id = ?').run(now, req.params.id);
 
   const updated = db.prepare('SELECT * FROM kill_switches WHERE id = ?').get(req.params.id) as KillSwitchRow;
-  logChange('kill_switch', req.params.id, 'activated', null);
+  logChange('kill_switch', req.params.id, 'activated', null, res.locals.actor as string);
 
   _broadcast?.({ type: 'kill_switch', key: updated.key, active: true, reason: updated.reason });
   return res.json({ success: true, data: parseKillSwitch(updated) });
@@ -123,7 +123,7 @@ router.post('/:id/deactivate', (req, res) => {
   db.prepare('UPDATE kill_switches SET active = 0, updated_at = ? WHERE id = ?').run(now, req.params.id);
 
   const updated = db.prepare('SELECT * FROM kill_switches WHERE id = ?').get(req.params.id) as KillSwitchRow;
-  logChange('kill_switch', req.params.id, 'deactivated', null);
+  logChange('kill_switch', req.params.id, 'deactivated', null, res.locals.actor as string);
 
   _broadcast?.({ type: 'kill_switch', key: updated.key, active: false, reason: updated.reason });
   return res.json({ success: true, data: parseKillSwitch(updated) });
@@ -135,7 +135,7 @@ router.delete('/:id', (req, res) => {
   if (!existing) return res.status(404).json({ success: false, error: 'Kill switch not found' });
 
   db.prepare('DELETE FROM kill_switches WHERE id = ?').run(req.params.id);
-  logChange('kill_switch', req.params.id, 'deleted', null);
+  logChange('kill_switch', req.params.id, 'deleted', null, res.locals.actor as string);
   return res.json({ success: true, data: null });
 });
 

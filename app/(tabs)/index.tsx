@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
+  Image,
   ScrollView,
   StyleSheet,
   ActivityIndicator,
@@ -13,17 +14,30 @@ import { SectionLabel } from "../../src/components/ui/SectionLabel";
 import { TrackRow } from "../../src/components/track/TrackRow";
 import { TrackCard } from "../../src/components/track/TrackCard";
 import { usePlayer } from "../../src/services/player";
-import { getCharts, type DeezerTrack } from "../../src/services/deezer";
+import {
+  getCharts,
+  searchTracks,
+  type DeezerTrack,
+} from "../../src/services/deezer";
 import {
   getRecent,
   pushRecent,
   toggleLike,
   isLiked,
 } from "../../src/services/library";
-import { Colors, Typography, Spacing } from "../../src/theme/tokens";
+import { Colors, Typography, Spacing, Radius } from "../../src/theme/tokens";
 import { useMiniPlayerPadding } from "../../src/hooks/useMiniPlayerPadding";
 import { useFeatureFlag, useExperiment } from "../../src/hooks/useRemoteConfig";
 import { Pill } from "../../src/components/ui/Pill";
+import { PremiumUpsellCard } from "../../src/components/PremiumUpsellCard";
+
+const GENRE_QUERIES: Record<string, string> = {
+  All: "",
+  Pop: "top pop hits",
+  "Hip-Hop": "top hip hop",
+  Electronic: "top electronic",
+  "R&B": "top r&b soul",
+};
 
 export default function HomeScreen() {
   const { user } = useUser();
@@ -34,23 +48,40 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const miniPlayerPadding = useMiniPlayerPadding();
   const showGenrePills = useFeatureFlag("show_genre_pills");
-  const greetingStyle = useExperiment("home_greeting_style", "control");
+  const showPremiumUpsell = useFeatureFlag("show_premium_upsell");
+  const showNewReleases = useFeatureFlag("new_releases");
+  const [newReleases, setNewReleases] = useState<DeezerTrack[]>([]);
+  const greetingStyle = useExperiment("tagline_test", "control");
   const chartLimit = parseInt(useExperiment("chart_limit", "8"), 10);
+  const homeLayout = useExperiment("home_layout", "control");
   const [activeGenre, setActiveGenre] = useState<string>("All");
 
   const userId = user?.id ?? "";
 
   useEffect(() => {
-    getCharts().then((tracks) => {
+    const query = GENRE_QUERIES[activeGenre];
+    const fetchFn = query ? searchTracks(query, 20) : getCharts();
+    fetchFn.then((tracks) => {
       setCharts(tracks);
       setLoading(false);
     });
-  }, []);
+  }, [activeGenre]);
+
+  const handleGenreSelect = (genre: string) => {
+    if (genre === activeGenre) return;
+    setActiveGenre(genre);
+    setLoading(true);
+  };
 
   useEffect(() => {
     if (!userId) return;
     getRecent(userId).then(setRecent);
   }, [userId]);
+
+  useEffect(() => {
+    if (!showNewReleases) return;
+    searchTracks("new music releases", 10).then(setNewReleases);
+  }, [showNewReleases]);
 
   const handlePlay = async (track: DeezerTrack) => {
     await play(track);
@@ -112,7 +143,7 @@ export default function HomeScreen() {
         {showGenrePills && (
           <View style={styles.genrePills}>
             {["All", "Pop", "Hip-Hop", "Electronic", "R&B"].map((g) => (
-              <TouchableOpacity key={g} onPress={() => setActiveGenre(g)}>
+              <TouchableOpacity key={g} onPress={() => handleGenreSelect(g)}>
                 <Pill label={g} active={activeGenre === g} />
               </TouchableOpacity>
             ))}
@@ -142,6 +173,37 @@ export default function HomeScreen() {
           </>
         )}
 
+        {showNewReleases && newReleases.length > 0 && (
+          <>
+            <SectionLabel>NEW RELEASES</SectionLabel>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.newReleasesScroll}
+            >
+              {newReleases.map((track) => (
+                <TouchableOpacity
+                  key={track.id}
+                  style={styles.releaseCard}
+                  onPress={() => handlePlay(track)}
+                  activeOpacity={0.8}
+                >
+                  <Image
+                    source={{ uri: track.album.cover_medium }}
+                    style={styles.releaseCover}
+                  />
+                  <Text style={styles.releaseTitle} numberOfLines={1}>
+                    {track.title}
+                  </Text>
+                  <Text style={styles.releaseArtist} numberOfLines={1}>
+                    {track.artist.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </>
+        )}
+
         {featured && (
           <>
             <SectionLabel>FEATURED</SectionLabel>
@@ -153,20 +215,79 @@ export default function HomeScreen() {
           </>
         )}
 
+        {showPremiumUpsell && <PremiumUpsellCard />}
+
         {chartList.length > 0 && (
           <>
             <SectionLabel>CHARTS</SectionLabel>
-            {chartList.map((track, i) => (
-              <TrackRow
-                key={track.id}
-                track={track}
-                onPlay={handlePlay}
-                rank={i + 2}
-                isLiked={likedIds.has(track.id)}
-                onLike={handleLike}
-                showLike
-              />
-            ))}
+
+            {homeLayout === "grid" && (
+              <View style={styles.grid}>
+                {chartList.map((track, i) => (
+                  <TouchableOpacity
+                    key={track.id}
+                    style={styles.gridCell}
+                    onPress={() => handlePlay(track)}
+                    activeOpacity={0.8}
+                  >
+                    <Image
+                      source={{ uri: track.album.cover_medium }}
+                      style={styles.gridCover}
+                    />
+                    <Text style={styles.gridRank}>#{i + 2}</Text>
+                    <Text style={styles.gridTitle} numberOfLines={1}>
+                      {track.title}
+                    </Text>
+                    <Text style={styles.gridArtist} numberOfLines={1}>
+                      {track.artist.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {homeLayout === "horizontal" && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.horizontalScroll}
+              >
+                {chartList.map((track, i) => (
+                  <TouchableOpacity
+                    key={track.id}
+                    style={styles.horizontalCard}
+                    onPress={() => handlePlay(track)}
+                    activeOpacity={0.8}
+                  >
+                    <Image
+                      source={{ uri: track.album.cover_medium }}
+                      style={styles.horizontalCover}
+                    />
+                    <Text style={styles.gridRank}>#{i + 2}</Text>
+                    <Text style={styles.gridTitle} numberOfLines={1}>
+                      {track.title}
+                    </Text>
+                    <Text style={styles.gridArtist} numberOfLines={1}>
+                      {track.artist.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+
+            {(homeLayout === "control" ||
+              !["grid", "horizontal"].includes(homeLayout)) &&
+              chartList.map((track, i) => (
+                <TrackRow
+                  key={track.id}
+                  track={track}
+                  onPlay={handlePlay}
+                  rank={i + 2}
+                  isLiked={likedIds.has(track.id)}
+                  onLike={handleLike}
+                  showLike
+                />
+              ))}
           </>
         )}
       </ScrollView>
@@ -198,5 +319,79 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 6,
     marginTop: Spacing.md,
+  },
+  grid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  gridCell: {
+    width: "48%",
+  },
+  gridCover: {
+    width: "100%",
+    aspectRatio: 1,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.muted,
+    marginBottom: 4,
+  },
+  gridRank: {
+    ...Typography.caption,
+    fontSize: 10,
+    color: Colors.accent,
+    fontWeight: "700",
+  },
+  gridTitle: {
+    ...Typography.body,
+    fontSize: 12,
+    fontWeight: "600",
+    color: Colors.text,
+  },
+  gridArtist: {
+    ...Typography.caption,
+    fontSize: 11,
+    color: Colors.textSecondary,
+    marginTop: 1,
+  },
+  horizontalScroll: {
+    gap: Spacing.sm,
+    paddingBottom: Spacing.sm,
+  },
+  horizontalCard: {
+    width: 130,
+  },
+  horizontalCover: {
+    width: 130,
+    height: 130,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.muted,
+    marginBottom: 4,
+  },
+  newReleasesScroll: {
+    gap: Spacing.sm,
+    paddingBottom: Spacing.sm,
+  },
+  releaseCard: {
+    width: 120,
+  },
+  releaseCover: {
+    width: 120,
+    height: 120,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.muted,
+    marginBottom: 6,
+  },
+  releaseTitle: {
+    ...Typography.body,
+    fontSize: 12,
+    fontWeight: "600",
+    color: Colors.text,
+  },
+  releaseArtist: {
+    ...Typography.caption,
+    fontSize: 11,
+    color: Colors.textSecondary,
+    marginTop: 1,
   },
 });

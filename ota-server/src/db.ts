@@ -2,16 +2,8 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 
-const DATA_DIR = process.env.DATA_DIR
-  ? path.resolve(process.cwd(), process.env.DATA_DIR)
-  : path.join(process.cwd(), 'data');
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-
-const db = new Database(path.join(DATA_DIR, 'ota.db'));
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
-
-db.exec(`
+export function initDb(db: Database.Database): void {
+  db.exec(`
   CREATE TABLE IF NOT EXISTS releases (
     id                  TEXT PRIMARY KEY,
     version             TEXT NOT NULL,
@@ -200,20 +192,86 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_error_events_group    ON error_events(group_id, recorded_at);
   CREATE INDEX IF NOT EXISTS idx_error_events_recorded ON error_events(recorded_at);
+
+  -- Part C: Audience Segments
+  CREATE TABLE IF NOT EXISTS segments (
+    id          TEXT PRIMARY KEY,
+    key         TEXT NOT NULL UNIQUE,
+    name        TEXT NOT NULL,
+    description TEXT,
+    rules       TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+  );
+
+  -- Part C: Experiment Exposures (one row per device per experiment)
+  CREATE TABLE IF NOT EXISTS experiment_exposures (
+    id            TEXT PRIMARY KEY,
+    experiment_id TEXT NOT NULL,
+    install_id    TEXT NOT NULL,
+    user_id       TEXT,
+    variant_id    TEXT NOT NULL,
+    exposed_at    TEXT NOT NULL,
+    UNIQUE (experiment_id, install_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_exposures_exp ON experiment_exposures(experiment_id);
+
+  -- Part C: Experiment Conversions
+  CREATE TABLE IF NOT EXISTS experiment_conversions (
+    id            TEXT PRIMARY KEY,
+    experiment_id TEXT NOT NULL,
+    install_id    TEXT NOT NULL,
+    user_id       TEXT,
+    variant_id    TEXT NOT NULL,
+    event_name    TEXT NOT NULL,
+    value         REAL DEFAULT 1,
+    converted_at  TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_conversions_exp ON experiment_conversions(experiment_id, event_name);
+
+  -- Part C: Flag / Experiment Schedules
+  CREATE TABLE IF NOT EXISTS flag_schedules (
+    id           TEXT PRIMARY KEY,
+    entity_type  TEXT NOT NULL,
+    entity_id    TEXT NOT NULL,
+    action       TEXT NOT NULL,
+    payload      TEXT,
+    scheduled_at TEXT NOT NULL,
+    executed_at  TEXT,
+    created_by   TEXT NOT NULL DEFAULT 'system',
+    created_at   TEXT NOT NULL
+  );
 `);
 
-// Migration: add rollout_advanced_at to existing DBs that predate this column
-const cols = (db.prepare("PRAGMA table_info(releases)").all() as Array<{ name: string }>)
-  .map(c => c.name);
-if (!cols.includes('rollout_advanced_at')) {
-  db.exec('ALTER TABLE releases ADD COLUMN rollout_advanced_at TEXT');
+  // Migration: add rollout_advanced_at to existing DBs that predate this column
+  const cols = (db.prepare("PRAGMA table_info(releases)").all() as Array<{ name: string }>)
+    .map(c => c.name);
+  if (!cols.includes('rollout_advanced_at')) {
+    db.exec('ALTER TABLE releases ADD COLUMN rollout_advanced_at TEXT');
+  }
+
+  // Migration: add notifier_type to alert_rules if missing
+  const alertCols = (db.prepare("PRAGMA table_info(alert_rules)").all() as Array<{ name: string }>)
+    .map(c => c.name);
+  if (!alertCols.includes('notifier_type')) {
+    db.exec("ALTER TABLE alert_rules ADD COLUMN notifier_type TEXT NOT NULL DEFAULT 'webhook'");
+  }
+
+  // Migration: add targeting column to kill_switches if not present
+  const ksColumns = db.prepare("PRAGMA table_info(kill_switches)").all() as { name: string }[];
+  if (!ksColumns.some(c => c.name === 'targeting')) {
+    db.exec(`ALTER TABLE kill_switches ADD COLUMN targeting TEXT`);
+  }
 }
 
-// Migration: add notifier_type to alert_rules if missing
-const alertCols = (db.prepare("PRAGMA table_info(alert_rules)").all() as Array<{ name: string }>)
-  .map(c => c.name);
-if (!alertCols.includes('notifier_type')) {
-  db.exec("ALTER TABLE alert_rules ADD COLUMN notifier_type TEXT NOT NULL DEFAULT 'webhook'");
-}
+const DATA_DIR = process.env.DATA_DIR
+  ? path.resolve(process.cwd(), process.env.DATA_DIR)
+  : path.join(process.cwd(), 'data');
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+
+const db = new Database(path.join(DATA_DIR, 'ota.db'));
+db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
+initDb(db);
 
 export default db;

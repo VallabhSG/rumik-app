@@ -85,6 +85,9 @@ function loadPanel(tab) {
   if (tab === 'releases')    loadReleases();
   if (tab === 'metrics')     loadMetrics();
   if (tab === 'audit')       loadAudit(0);
+  if (tab === 'segments')    loadSegments();
+  if (tab === 'results')     loadResults();
+  if (tab === 'schedules')   loadSchedules();
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -855,7 +858,8 @@ async function loadCrashTrendChart() {
     }));
 
     if (datasets.length === 0) {
-      document.getElementById('chart-crash-trend').parentElement.innerHTML =
+      const el = document.getElementById('chart-crash-trend');
+      if (el && el.parentElement) el.parentElement.innerHTML =
         '<p style="text-align:center;color:var(--text-muted);padding:32px 0">No crash data yet</p>';
       return;
     }
@@ -901,7 +905,8 @@ async function loadPerfTrendChart() {
     ];
 
     if (allBuckets.length === 0) {
-      document.getElementById('chart-perf-trend').parentElement.innerHTML =
+      const el = document.getElementById('chart-perf-trend');
+      if (el && el.parentElement) el.parentElement.innerHTML =
         '<p style="text-align:center;color:var(--text-muted);padding:32px 0">No perf data yet</p>';
       return;
     }
@@ -1123,7 +1128,7 @@ async function loadFunnelChart(releaseId) {
     const colors = ['#4f8ef7','#4f8ef7cc','#4f8ef799','#4f8ef766','#3ecf8e'];
 
     if (values[0] === 0) {
-      canvas.parentElement.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:32px 0">No adoption events yet for this release.</p>';
+      if (canvas && canvas.parentElement) canvas.parentElement.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:32px 0">No adoption events yet for this release.</p>';
       statsEl.innerHTML = '';
       return;
     }
@@ -1156,7 +1161,8 @@ async function loadVelocityChart(releaseId) {
     ];
 
     if (!data.length) {
-      document.getElementById('chart-velocity').parentElement.innerHTML =
+      const el = document.getElementById('chart-velocity');
+      if (el && el.parentElement) el.parentElement.innerHTML =
         '<p style="text-align:center;color:var(--text-muted);padding:32px 0">No velocity data yet.</p>';
       return;
     }
@@ -1350,6 +1356,144 @@ document.getElementById('error-status-filter').onchange = () => loadErrors(0);
 document.getElementById('btn-refresh-errors').onclick   = () => loadErrors(0);
 document.getElementById('btn-errors-prev').onclick = () => loadErrors(errorsPage - ERRORS_LIMIT);
 document.getElementById('btn-errors-next').onclick = () => loadErrors(errorsPage + ERRORS_LIMIT);
+
+// ── Segments ─────────────────────────────────────────────────────────────────
+
+async function loadSegments() {
+  const el = document.getElementById('segments-table');
+  el.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>';
+  try {
+    const { data } = await get('/segments');
+    if (!data.length) {
+      el.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-muted)">No segments yet.</td></tr>';
+      return;
+    }
+    el.innerHTML = data.map(s => {
+      const rules = Array.isArray(s.rules) ? s.rules : JSON.parse(s.rules || '[]');
+      const rulesText = rules.map(r => `${r.attribute} ${r.operator} ${JSON.stringify(r.value)}`).join('; ');
+      return `
+        <tr>
+          <td><code>${esc(s.key)}</code></td>
+          <td>${esc(s.name)}</td>
+          <td style="color:var(--text-muted)">${esc(s.description || '—')}</td>
+          <td style="font-size:11px;color:var(--text-muted)">${esc(rulesText)}</td>
+          <td>${fmtDate(s.updated_at)}</td>
+          <td>
+            <button class="btn btn-danger" onclick="deleteSegment('${s.id}', '${esc(s.key)}')">Delete</button>
+          </td>
+        </tr>`;
+    }).join('');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+window.deleteSegment = async function(id, key) {
+  const res = await openModal('Delete Segment', `<p>Delete segment <code>${esc(key)}</code>?</p>`, 'Delete');
+  if (!res?.confirmed) return;
+  try { await del(`/segments/${id}`); toast('Segment deleted'); loadSegments(); }
+  catch (e) { toast(e.message, 'error'); }
+};
+
+document.getElementById('btn-add-segment').onclick = async () => {
+  const res = await openModal('New Segment', `
+    <div class="field"><label>Key (snake_case)</label><input id="sg-key" placeholder="premium_users"></div>
+    <div class="field"><label>Name</label><input id="sg-name" placeholder="Premium Users"></div>
+    <div class="field"><label>Description</label><input id="sg-desc" placeholder="Optional description"></div>
+    <div class="field">
+      <label>Rules JSON (array of {attribute, operator, value})</label>
+      <textarea id="sg-rules" rows="4">[{"attribute":"plan","operator":"eq","value":"premium"}]</textarea>
+    </div>`);
+  if (!res?.confirmed) return;
+  const key = document.getElementById('sg-key').value.trim();
+  const name = document.getElementById('sg-name').value.trim();
+  const description = document.getElementById('sg-desc').value.trim();
+  let rules;
+  try { rules = JSON.parse(document.getElementById('sg-rules').value); }
+  catch { toast('Rules must be valid JSON', 'error'); return; }
+  if (!key || !name) { toast('Key and Name are required', 'error'); return; }
+  try { await post('/segments', { key, name, description, rules }); toast('Segment created', 'success'); loadSegments(); }
+  catch (e) { toast(e.message, 'error'); }
+};
+
+// ── Experiment Results ────────────────────────────────────────────────────────
+
+async function loadResults() {
+  const container = document.getElementById('results-container');
+  container.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:32px">Loading…</p>';
+  try {
+    const { data: experiments } = await get('/experiments');
+    const active = experiments.filter(e => e.status === 'active' || e.status === 'completed');
+    if (!active.length) {
+      container.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:32px">No active or completed experiments.</p>';
+      return;
+    }
+    const sections = await Promise.all(active.map(async (exp) => {
+      try {
+        const res = await get(`/experiments/${exp.key}/results`);
+        const winnerBadge = res.winner ? `<span class="badge-active">winner: ${esc(res.winner)}</span>` : '';
+        const rows = (res.variants || []).map(v => `
+          <tr>
+            <td>${esc(v.id)}</td>
+            <td>${v.exposures}</td>
+            <td>${v.conversions}</td>
+            <td>${(v.rate * 100).toFixed(1)}%</td>
+            <td>${v.lift_vs_control >= 0 ? '+' : ''}${(v.lift_vs_control * 100).toFixed(1)}%</td>
+          </tr>`).join('');
+        return `
+          <div style="margin-bottom:32px">
+            <div class="toolbar" style="margin-bottom:8px">
+              <h3 style="font-size:14px;font-weight:600"><code>${esc(exp.key)}</code> <span class="badge-${exp.status}">${esc(exp.status)}</span></h3>
+              ${winnerBadge}
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Variant</th><th>Exposures</th><th>Conversions</th><th>Rate</th><th>Lift vs Control</th></tr></thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>
+          </div>`;
+      } catch { return `<p style="color:var(--text-muted)">Could not load results for <code>${esc(exp.key)}</code></p>`; }
+    }));
+    container.innerHTML = sections.join('');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+document.getElementById('btn-refresh-results').onclick = () => loadResults();
+
+// ── Schedules ─────────────────────────────────────────────────────────────────
+
+async function loadSchedules() {
+  const el = document.getElementById('schedules-table');
+  el.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>';
+  try {
+    const { data } = await get('/schedules');
+    if (!data.length) {
+      el.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-muted)">No scheduled changes.</td></tr>';
+      return;
+    }
+    el.innerHTML = data.map(s => {
+      const isPending = !s.executed_at;
+      const statusBadge = isPending ? '<span class="badge-draft">pending</span>' : '<span class="badge-completed">executed</span>';
+      return `
+        <tr>
+          <td><code>${esc(s.entity_type)}/${esc(s.entity_id)}</code></td>
+          <td>${esc(s.action)} ${statusBadge}</td>
+          <td>${fmtDate(s.scheduled_at)}</td>
+          <td>${s.executed_at ? fmtDate(s.executed_at) : '—'}</td>
+          <td style="color:var(--text-muted)">${esc(s.created_by)}</td>
+          <td>${isPending ? `<button class="btn btn-danger" onclick="deleteSchedule('${s.id}')">Cancel</button>` : '—'}</td>
+        </tr>`;
+    }).join('');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+window.deleteSchedule = async function(id) {
+  const res = await openModal('Cancel Schedule', '<p>Cancel this scheduled change?</p>', 'Cancel Schedule');
+  if (!res?.confirmed) return;
+  try { await del(`/schedules/${id}`); toast('Schedule cancelled'); loadSchedules(); }
+  catch (e) { toast(e.message, 'error'); }
+};
+
+document.getElementById('btn-refresh-schedules').onclick = () => loadSchedules();
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 

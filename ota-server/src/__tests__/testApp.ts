@@ -28,7 +28,7 @@ export function createTestDb(): Database.Database {
     );
     CREATE TABLE IF NOT EXISTS kill_switches (
       id TEXT PRIMARY KEY, key TEXT NOT NULL UNIQUE, active INTEGER NOT NULL DEFAULT 0,
-      reason TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      reason TEXT, targeting TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS audit_log (
       id TEXT PRIMARY KEY, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL,
@@ -97,6 +97,31 @@ export function createTestDb(): Database.Database {
     );
     CREATE INDEX IF NOT EXISTS idx_error_events_group    ON error_events(group_id, recorded_at);
     CREATE INDEX IF NOT EXISTS idx_error_events_recorded ON error_events(recorded_at);
+    CREATE TABLE IF NOT EXISTS segments (
+      id TEXT PRIMARY KEY, key TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+      description TEXT, rules TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS experiment_exposures (
+      id TEXT PRIMARY KEY, experiment_id TEXT NOT NULL, install_id TEXT NOT NULL,
+      user_id TEXT, variant_id TEXT NOT NULL, exposed_at TEXT NOT NULL,
+      UNIQUE (experiment_id, install_id)
+    );
+    CREATE TABLE IF NOT EXISTS experiment_conversions (
+      id TEXT PRIMARY KEY, experiment_id TEXT NOT NULL, install_id TEXT NOT NULL,
+      user_id TEXT, variant_id TEXT NOT NULL, event_name TEXT NOT NULL,
+      value REAL NOT NULL DEFAULT 1, converted_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS flag_schedules (
+      id TEXT PRIMARY KEY,
+      entity_type TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      action TEXT NOT NULL,
+      payload TEXT,
+      scheduled_at TEXT NOT NULL,
+      executed_at TEXT,
+      created_by TEXT NOT NULL DEFAULT 'system',
+      created_at TEXT NOT NULL
+    );
   `);
 
   return db;

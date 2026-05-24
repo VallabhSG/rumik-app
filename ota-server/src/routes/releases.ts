@@ -112,7 +112,7 @@ router.post('/', (req: Request, res: Response) => {
 
   const release = db.prepare('SELECT * FROM releases WHERE id = ?').get(id);
   try {
-    logChange('release', id, 'created', diffObjects(null, release as Record<string, unknown>));
+    logChange('release', id, 'created', diffObjects(null, release as Record<string, unknown>), res.locals.actor as string);
   } catch (e) {
     logger.warn({ err: e }, 'Audit log write failed');
   }
@@ -153,7 +153,7 @@ router.patch('/:id', (req: Request, res: Response) => {
     logChange('release', req.params.id, 'updated', diffObjects(
       release as Record<string, unknown>,
       updated as Record<string, unknown>,
-    ));
+    ), res.locals.actor as string);
   } catch (e) {
     logger.warn({ err: e }, 'Audit log write failed');
   }
@@ -172,7 +172,7 @@ router.post('/current/pause', (req: Request, res: Response) => {
 
   if (result.changes > 0) {
     try {
-      logChange('release', channel, 'paused', { channel: { old: null, new: channel }, reason: { old: null, new: reason ?? 'manual' } });
+      logChange('release', channel, 'paused', { channel: { old: null, new: channel }, reason: { old: null, new: reason ?? 'manual' } }, res.locals.actor as string);
     } catch (e) {
       logger.warn({ err: e }, 'Audit log write failed');
     }
@@ -195,7 +195,7 @@ router.delete('/:id', (req: Request, res: Response) => {
     return;
   }
   try {
-    logChange('release', req.params.id, 'rolled_back', null);
+    logChange('release', req.params.id, 'rolled_back', null, res.locals.actor as string);
   } catch (e) {
     logger.warn({ err: e }, 'Audit log write failed');
   }

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
+import { randomUUID } from 'crypto';
 import db from '../db.js';
 import { logChange, diffObjects } from '../services/audit.js';
 
@@ -87,7 +88,7 @@ router.post('/', (req, res) => {
     throw err;
   }
 
-  logChange('experiment', id, 'created', null);
+  logChange('experiment', id, 'created', null, res.locals.actor as string);
   const row = db.prepare('SELECT * FROM experiments WHERE id = ?').get(id) as ExperimentRow;
   return res.status(201).json({ success: true, data: parseExperiment(row) });
 });
@@ -118,7 +119,7 @@ router.patch('/:id', (req, res) => {
   logChange('experiment', req.params.id, 'updated', diffObjects(
     { status: existing.status, variants: existing.variants, targeting: existing.targeting },
     { status: updated.status, variants: updated.variants, targeting: updated.targeting },
-  ));
+  ), res.locals.actor as string);
   return res.json({ success: true, data: parseExperiment(updated) });
 });
 
@@ -128,8 +129,78 @@ router.delete('/:id', (req, res) => {
   if (!existing) return res.status(404).json({ success: false, error: 'Experiment not found' });
 
   db.prepare('DELETE FROM experiments WHERE id = ?').run(req.params.id);
-  logChange('experiment', req.params.id, 'deleted', null);
+  logChange('experiment', req.params.id, 'deleted', null, res.locals.actor as string);
   return res.json({ success: true, data: null });
+});
+
+const ExposeSchema = z.object({
+  install_id: z.string().min(1),
+  user_id: z.string().optional(),
+  variant_id: z.string().min(1),
+});
+
+const ConvertSchema = z.object({
+  install_id: z.string().min(1),
+  user_id: z.string().optional(),
+  variant_id: z.string().min(1),
+  event_name: z.string().min(1),
+  value: z.number().optional().default(1),
+});
+
+// POST /api/experiments/:key/expose
+router.post('/:key/expose', (req, res) => {
+  const parse = ExposeSchema.safeParse(req.body);
+  if (!parse.success) return void res.status(400).json({ error: parse.error.flatten() });
+  const exp = db.prepare('SELECT id FROM experiments WHERE key = ?').get(req.params.key) as { id: string } | undefined;
+  if (!exp) return void res.status(404).json({ error: 'Experiment not found' });
+  const { install_id, user_id, variant_id } = parse.data;
+  db.prepare(
+    `INSERT OR IGNORE INTO experiment_exposures (id, experiment_id, install_id, user_id, variant_id, exposed_at)
+     VALUES (?, ?, ?, ?, ?, datetime('now'))`
+  ).run(randomUUID(), exp.id, install_id, user_id ?? null, variant_id);
+  return void res.json({ ok: true });
+});
+
+// POST /api/experiments/:key/convert
+router.post('/:key/convert', (req, res) => {
+  const parse = ConvertSchema.safeParse(req.body);
+  if (!parse.success) return void res.status(400).json({ error: parse.error.flatten() });
+  const exp = db.prepare('SELECT id FROM experiments WHERE key = ?').get(req.params.key) as { id: string } | undefined;
+  if (!exp) return void res.status(404).json({ error: 'Experiment not found' });
+  const { install_id, user_id, variant_id, event_name, value } = parse.data;
+  db.prepare(
+    `INSERT INTO experiment_conversions (id, experiment_id, install_id, user_id, variant_id, event_name, value, converted_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+  ).run(randomUUID(), exp.id, install_id, user_id ?? null, variant_id, event_name, value);
+  return void res.json({ ok: true });
+});
+
+// GET /api/experiments/:key/results
+router.get('/:key/results', (req, res) => {
+  const exp = db.prepare('SELECT id, variants FROM experiments WHERE key = ?').get(req.params.key) as { id: string; variants: string } | undefined;
+  if (!exp) return void res.status(404).json({ error: 'Experiment not found' });
+  const variants: { id: string; weight: number }[] = JSON.parse(exp.variants);
+
+  const variantStats = variants.map(v => {
+    const exposures = (db.prepare(
+      'SELECT COUNT(DISTINCT install_id) as cnt FROM experiment_exposures WHERE experiment_id = ? AND variant_id = ?'
+    ).get(exp.id, v.id) as { cnt: number }).cnt;
+    const conversions = (db.prepare(
+      'SELECT COUNT(DISTINCT install_id) as cnt FROM experiment_conversions WHERE experiment_id = ? AND variant_id = ?'
+    ).get(exp.id, v.id) as { cnt: number }).cnt;
+    const rate = exposures > 0 ? conversions / exposures : 0;
+    return { id: v.id, exposures, conversions, rate, lift_vs_control: 0 };
+  });
+
+  const control = variantStats.find(v => v.id === 'control');
+  if (control) {
+    for (const v of variantStats) {
+      v.lift_vs_control = control.rate > 0 ? (v.rate - control.rate) / control.rate : 0;
+    }
+  }
+
+  const winner = variantStats.find(v => v.id !== 'control' && v.lift_vs_control >= 0.1)?.id ?? null;
+  return void res.json({ variants: variantStats, winner });
 });
 
 export default router;

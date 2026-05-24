@@ -8,11 +8,21 @@ import {
   StyleSheet,
   Dimensions,
   PanResponder,
+  Linking,
+  ActivityIndicator,
 } from "react-native";
 import { usePlayer } from "../../services/player";
 import { useUser } from "@clerk/clerk-expo";
 import { toggleLike, isLiked as checkIsLiked } from "../../services/library";
 import { Colors, Typography, Spacing, Radius } from "../../theme/tokens";
+import {
+  useFlag,
+  useExperimentVariant,
+} from "../../contexts/RemoteConfigContext";
+import { downloadTrack, isDownloaded } from "../../services/offline";
+import * as Haptics from "expo-haptics";
+
+type DownloadStatus = "idle" | "downloading" | "downloaded";
 
 const { width } = Dimensions.get("window");
 
@@ -26,12 +36,28 @@ export function NowPlaying({ visible, onClose }: Props) {
     usePlayer();
   const { user } = useUser();
   const [liked, setLiked] = useState(false);
+  const [downloadStatus, setDownloadStatus] = useState<DownloadStatus>("idle");
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const enableLyricsLink = useFlag("enable_lyrics_link");
+  const enableOfflineMode = useFlag("enable_offline_mode");
+  const hapticsEnabled = useFlag("ios_exclusive_feature");
+  const playerUiVariant = useExperimentVariant("player_ui");
+  const isImmersive = playerUiVariant === "immersive";
 
   useEffect(() => {
     if (track && user?.id) {
       checkIsLiked(user.id, track.id).then(setLiked);
     }
   }, [track, user?.id]);
+
+  useEffect(() => {
+    if (!track) return;
+    setDownloadStatus("idle");
+    setDownloadProgress(0);
+    isDownloaded(track.id).then((already) => {
+      if (already) setDownloadStatus("downloaded");
+    });
+  }, [track?.id]);
 
   const panResponder = PanResponder.create({
     onMoveShouldSetPanResponder: (_, g) => g.dy > 10,
@@ -44,6 +70,9 @@ export function NowPlaying({ visible, onClose }: Props) {
     if (!track || !user?.id) return;
     await toggleLike(user.id, track);
     setLiked((prev) => !prev);
+    if (hapticsEnabled) {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
   };
 
   const formatMs = (ms: number) => {
@@ -58,15 +87,34 @@ export function NowPlaying({ visible, onClose }: Props) {
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={styles.container} {...panResponder.panHandlers}>
+      <View
+        style={[styles.container, isImmersive && styles.containerImmersive]}
+        {...panResponder.panHandlers}
+      >
         <View style={styles.handle} />
 
-        <Image source={{ uri: track.album.cover_medium }} style={styles.art} />
+        <Image
+          source={{ uri: track.album.cover_medium }}
+          style={[styles.art, isImmersive && styles.artImmersive]}
+        />
 
         <View style={styles.info}>
           <Text style={styles.title}>{track.title}</Text>
           <Text style={styles.artist}>{track.artist.name}</Text>
           <Text style={styles.album}>{track.album.title}</Text>
+          {enableLyricsLink && (
+            <TouchableOpacity
+              onPress={() => {
+                const lyricsUrl = `https://genius.com/search?q=${encodeURIComponent(
+                  track.title + " " + track.artist.name,
+                )}`;
+                void Linking.openURL(lyricsUrl);
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={styles.lyricsLink}>View Lyrics</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <TouchableOpacity
@@ -102,6 +150,41 @@ export function NowPlaying({ visible, onClose }: Props) {
           >
             <Text style={styles.playBtnIcon}>{isPlaying ? "⏸" : "▶"}</Text>
           </TouchableOpacity>
+          {enableOfflineMode && (
+            <TouchableOpacity
+              onPress={async () => {
+                if (downloadStatus !== "idle") return;
+                setDownloadStatus("downloading");
+                setDownloadProgress(0);
+                try {
+                  await downloadTrack(track, (p) => setDownloadProgress(p));
+                  setDownloadStatus("downloaded");
+                } catch {
+                  setDownloadStatus("idle");
+                }
+              }}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              disabled={downloadStatus !== "idle"}
+            >
+              {downloadStatus === "downloading" ? (
+                <View style={styles.downloadingWrap}>
+                  <ActivityIndicator size="small" color={Colors.accent} />
+                  <Text style={styles.downloadPct}>
+                    {Math.round(downloadProgress * 100)}%
+                  </Text>
+                </View>
+              ) : (
+                <Text
+                  style={[
+                    styles.action,
+                    downloadStatus === "downloaded" && styles.actionActive,
+                  ]}
+                >
+                  {downloadStatus === "downloaded" ? "✓" : "⬇"}
+                </Text>
+              )}
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             onPress={onClose}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -154,6 +237,17 @@ const styles = StyleSheet.create({
   },
   artist: { ...Typography.body, color: Colors.textSecondary, marginTop: 4 },
   album: { ...Typography.caption, color: Colors.textMuted, marginTop: 2 },
+  lyricsLink: { color: "#6C3CF7", fontSize: 14, marginTop: 8 },
+  containerImmersive: {
+    backgroundColor: "#000000",
+  },
+  artImmersive: {
+    width: width * 0.88,
+    height: width * 0.88,
+    borderRadius: 24,
+    shadowOpacity: 0.45,
+    shadowRadius: 40,
+  },
   scrubberTrack: {
     height: 4,
     backgroundColor: Colors.muted,
@@ -183,6 +277,8 @@ const styles = StyleSheet.create({
   },
   action: { fontSize: 24, color: Colors.muted },
   actionActive: { color: Colors.accent },
+  downloadingWrap: { alignItems: "center", gap: 2 },
+  downloadPct: { fontSize: 9, color: Colors.accent, fontWeight: "700" },
   playBtn: {
     width: 64,
     height: 64,

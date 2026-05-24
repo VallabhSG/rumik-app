@@ -8,10 +8,17 @@ jest.mock('../../db.js', () => testDb);
 import request from 'supertest';
 import express from 'express';
 import flagsRouter from '../../routes/flags.js';
+import { actorMiddleware } from '../../middleware/actor.js';
 
 const app = express();
 app.use(express.json());
 app.use('/api/flags', flagsRouter);
+
+// Separate app that includes actor middleware for actor-identity tests
+const actorApp = express();
+actorApp.use(express.json());
+actorApp.use(actorMiddleware);
+actorApp.use('/api/flags', flagsRouter);
 
 describe('Feature Flags API', () => {
   beforeEach(() => {
@@ -125,6 +132,29 @@ describe('Feature Flags API', () => {
     it('returns 404 for already deleted flag', async () => {
       const res = await request(app).delete('/api/flags/ghost');
       expect(res.status).toBe(404);
+    });
+  });
+
+  describe('Actor identity in audit log', () => {
+    it('records actor from X-Actor header', async () => {
+      await request(actorApp)
+        .post('/api/flags')
+        .set('X-Actor', 'test-admin')
+        .send({ key: 'actor_flag_1' });
+      const entry = testDb
+        .prepare("SELECT * FROM audit_log WHERE entity_type = 'flag' ORDER BY created_at DESC LIMIT 1")
+        .get() as { actor: string };
+      expect(entry.actor).toBe('test-admin');
+    });
+
+    it('defaults actor to api when no X-Actor header', async () => {
+      await request(actorApp)
+        .post('/api/flags')
+        .send({ key: 'actor_flag_2' });
+      const entry = testDb
+        .prepare("SELECT * FROM audit_log WHERE entity_type = 'flag' ORDER BY created_at DESC LIMIT 1")
+        .get() as { actor: string };
+      expect(entry.actor).toBe('api');
     });
   });
 });
