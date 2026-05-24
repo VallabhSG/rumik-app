@@ -8,11 +8,13 @@ import {
   StyleSheet,
   Dimensions,
   PanResponder,
+  Linking,
 } from "react-native";
 import { usePlayer } from "../../services/player";
 import { useUser } from "@clerk/clerk-expo";
 import { toggleLike, isLiked as checkIsLiked } from "../../services/library";
 import { Colors, Typography, Spacing, Radius } from "../../theme/tokens";
+import { useFlag } from "../../contexts/RemoteConfigContext";
 
 const { width } = Dimensions.get("window");
 
@@ -26,6 +28,7 @@ export function NowPlaying({ visible, onClose }: Props) {
     usePlayer();
   const { user } = useUser();
   const [liked, setLiked] = useState(false);
+  const enableLyricsLink = useFlag("enable_lyrics_link");
 
   useEffect(() => {
     if (track && user?.id) {
@@ -67,6 +70,19 @@ export function NowPlaying({ visible, onClose }: Props) {
           <Text style={styles.title}>{track.title}</Text>
           <Text style={styles.artist}>{track.artist.name}</Text>
           <Text style={styles.album}>{track.album.title}</Text>
+          {enableLyricsLink && (
+            <TouchableOpacity
+              onPress={() => {
+                const lyricsUrl = `https://genius.com/search?q=${encodeURIComponent(
+                  track.title + " " + track.artist.name
+                )}`;
+                void Linking.openURL(lyricsUrl);
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={styles.lyricsLink}>View Lyrics</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <TouchableOpacity
@@ -154,6 +170,7 @@ const styles = StyleSheet.create({
   },
   artist: { ...Typography.body, color: Colors.textSecondary, marginTop: 4 },
   album: { ...Typography.caption, color: Colors.textMuted, marginTop: 2 },
+  lyricsLink: { color: "#6C3CF7", fontSize: 14, marginTop: 8 },
   scrubberTrack: {
     height: 4,
     backgroundColor: Colors.muted,
