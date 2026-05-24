@@ -1,8 +1,9 @@
-import * as FileSystem from "expo-file-system";
+import { File, Directory } from "expo-file-system";
+import * as LegacyFS from "expo-file-system/legacy";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { DeezerTrack } from "./deezer";
 
-const OFFLINE_DIR = `${FileSystem.documentDirectory}offline/`;
+const OFFLINE_DIR = `${LegacyFS.documentDirectory}offline/`;
 const STORAGE_KEY = "offline:tracks";
 
 interface OfflineMeta {
@@ -18,10 +19,10 @@ function localUri(trackId: number): string {
   return `${OFFLINE_DIR}${trackId}.mp3`;
 }
 
-async function ensureDir(): Promise<void> {
-  const info = await FileSystem.getInfoAsync(OFFLINE_DIR);
-  if (!info.exists) {
-    await FileSystem.makeDirectoryAsync(OFFLINE_DIR, { intermediates: true });
+function ensureDir(): void {
+  const dir = new Directory(OFFLINE_DIR);
+  if (!dir.exists) {
+    dir.create();
   }
 }
 
@@ -42,10 +43,10 @@ export async function downloadTrack(
   track: DeezerTrack,
   onProgress?: (progress: number) => void,
 ): Promise<void> {
-  await ensureDir();
+  ensureDir();
   const uri = localUri(track.id);
 
-  const dl = FileSystem.createDownloadResumable(
+  const dl = LegacyFS.createDownloadResumable(
     track.preview,
     uri,
     {},
@@ -73,21 +74,23 @@ export async function downloadTrack(
 export async function isDownloaded(trackId: number): Promise<boolean> {
   const meta = await loadMeta();
   if (!meta[trackId]) return false;
-  const info = await FileSystem.getInfoAsync(meta[trackId].localUri);
-  return info.exists;
+  return new File(meta[trackId].localUri).exists;
 }
 
 export async function getLocalUri(trackId: number): Promise<string | null> {
   const meta = await loadMeta();
   if (!meta[trackId]) return null;
-  const info = await FileSystem.getInfoAsync(meta[trackId].localUri);
-  return info.exists ? meta[trackId].localUri : null;
+  const file = new File(meta[trackId].localUri);
+  return file.exists ? meta[trackId].localUri : null;
 }
 
 export async function removeDownload(trackId: number): Promise<void> {
   const meta = await loadMeta();
   if (!meta[trackId]) return;
-  await FileSystem.deleteAsync(meta[trackId].localUri, { idempotent: true });
+  const file = new File(meta[trackId].localUri);
+  if (file.exists) {
+    file.delete();
+  }
   delete meta[trackId];
   await saveMeta(meta);
 }
