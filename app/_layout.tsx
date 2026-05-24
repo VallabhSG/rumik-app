@@ -4,8 +4,9 @@ import { Slot } from "expo-router";
 import { useEffect } from "react";
 import { PlayerProvider } from "../src/services/player";
 import { OtaProvider } from "../src/contexts/OtaContext";
-import { RemoteConfigProvider, useRemoteConfigClient } from "../src/hooks/useRemoteConfig";
+import { RemoteConfigProvider, useRemoteConfigClient, useFeatureFlag } from "../src/hooks/useRemoteConfig";
 import { RemoteConfigPayloadProvider } from "../src/contexts/RemoteConfigContext";
+import { OnboardingModal } from "../src/components/OnboardingModal";
 import Constants from "expo-constants";
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
@@ -25,6 +26,11 @@ function resolveOtaServerUrl(): string {
 }
 
 const otaServerUrl = resolveOtaServerUrl();
+
+function OnboardingGate() {
+  const enabled = useFeatureFlag("new_onboarding");
+  return <OnboardingModal enabled={enabled} />;
+}
 
 function ClerkUserBridge() {
   const { user } = useUser();
@@ -49,6 +55,7 @@ export default function RootLayout() {
         <RemoteConfigProvider serverUrl={otaServerUrl} apiKey={otaApiKey}>
           <RemoteConfigPayloadProvider>
             <ClerkUserBridge />
+            <OnboardingGate />
             <OtaProvider>
               <PlayerProvider>
                 <Slot />

@@ -155,6 +155,12 @@ function seedDemoData(): void {
         ('flag-004', 'enable_lyrics_link', 1, 'Link to lyrics from now playing',
          NULL, datetime('now'), datetime('now')),
         ('flag-005', 'show_genre_pills', 1, 'Genre filter pills on home screen',
+         NULL, datetime('now'), datetime('now')),
+        ('flag-006', 'ios_exclusive_feature', 1, 'Haptic feedback on like — iOS only',
+         '{"platforms":["ios"]}', datetime('now'), datetime('now')),
+        ('flag-007', 'new_releases', 1, 'New Releases horizontal scroll on home screen',
+         NULL, datetime('now'), datetime('now')),
+        ('flag-008', 'new_onboarding', 1, 'Show new swipeable onboarding on first launch',
          NULL, datetime('now'), datetime('now'))
     `);
 

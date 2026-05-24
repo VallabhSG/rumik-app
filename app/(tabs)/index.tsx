@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
+  Image,
   ScrollView,
   StyleSheet,
   ActivityIndicator,
@@ -24,7 +25,7 @@ import {
   toggleLike,
   isLiked,
 } from "../../src/services/library";
-import { Colors, Typography, Spacing } from "../../src/theme/tokens";
+import { Colors, Typography, Spacing, Radius } from "../../src/theme/tokens";
 import { useMiniPlayerPadding } from "../../src/hooks/useMiniPlayerPadding";
 import { useFeatureFlag, useExperiment } from "../../src/hooks/useRemoteConfig";
 import { Pill } from "../../src/components/ui/Pill";
@@ -48,6 +49,8 @@ export default function HomeScreen() {
   const miniPlayerPadding = useMiniPlayerPadding();
   const showGenrePills = useFeatureFlag("show_genre_pills");
   const showPremiumUpsell = useFeatureFlag("show_premium_upsell");
+  const showNewReleases = useFeatureFlag("new_releases");
+  const [newReleases, setNewReleases] = useState<DeezerTrack[]>([]);
   const greetingStyle = useExperiment("tagline_test", "control");
   const chartLimit = parseInt(useExperiment("chart_limit", "8"), 10);
   const [activeGenre, setActiveGenre] = useState<string>("All");
@@ -73,6 +76,11 @@ export default function HomeScreen() {
     if (!userId) return;
     getRecent(userId).then(setRecent);
   }, [userId]);
+
+  useEffect(() => {
+    if (!showNewReleases) return;
+    searchTracks("new music releases", 10).then(setNewReleases);
+  }, [showNewReleases]);
 
   const handlePlay = async (track: DeezerTrack) => {
     await play(track);
@@ -164,6 +172,37 @@ export default function HomeScreen() {
           </>
         )}
 
+        {showNewReleases && newReleases.length > 0 && (
+          <>
+            <SectionLabel>NEW RELEASES</SectionLabel>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.newReleasesScroll}
+            >
+              {newReleases.map((track) => (
+                <TouchableOpacity
+                  key={track.id}
+                  style={styles.releaseCard}
+                  onPress={() => handlePlay(track)}
+                  activeOpacity={0.8}
+                >
+                  <Image
+                    source={{ uri: track.album.cover_medium }}
+                    style={styles.releaseCover}
+                  />
+                  <Text style={styles.releaseTitle} numberOfLines={1}>
+                    {track.title}
+                  </Text>
+                  <Text style={styles.releaseArtist} numberOfLines={1}>
+                    {track.artist.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </>
+        )}
+
         {featured && (
           <>
             <SectionLabel>FEATURED</SectionLabel>
@@ -222,5 +261,31 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 6,
     marginTop: Spacing.md,
+  },
+  newReleasesScroll: {
+    gap: Spacing.sm,
+    paddingBottom: Spacing.sm,
+  },
+  releaseCard: {
+    width: 120,
+  },
+  releaseCover: {
+    width: 120,
+    height: 120,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.muted,
+    marginBottom: 6,
+  },
+  releaseTitle: {
+    ...Typography.body,
+    fontSize: 12,
+    fontWeight: "600",
+    color: Colors.text,
+  },
+  releaseArtist: {
+    ...Typography.caption,
+    fontSize: 11,
+    color: Colors.textSecondary,
+    marginTop: 1,
   },
 });

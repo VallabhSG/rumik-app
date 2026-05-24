@@ -17,6 +17,7 @@ import { toggleLike, isLiked as checkIsLiked } from "../../services/library";
 import { Colors, Typography, Spacing, Radius } from "../../theme/tokens";
 import { useFlag, useExperimentVariant } from "../../contexts/RemoteConfigContext";
 import { downloadTrack, isDownloaded } from "../../services/offline";
+import * as Haptics from "expo-haptics";
 
 type DownloadStatus = "idle" | "downloading" | "downloaded";
 
@@ -36,6 +37,7 @@ export function NowPlaying({ visible, onClose }: Props) {
   const [downloadProgress, setDownloadProgress] = useState(0);
   const enableLyricsLink = useFlag("enable_lyrics_link");
   const enableOfflineMode = useFlag("enable_offline_mode");
+  const hapticsEnabled = useFlag("ios_exclusive_feature");
   const playerUiVariant = useExperimentVariant("player_ui");
   const isImmersive = playerUiVariant === "immersive";
 
@@ -65,6 +67,9 @@ export function NowPlaying({ visible, onClose }: Props) {
     if (!track || !user?.id) return;
     await toggleLike(user.id, track);
     setLiked((prev) => !prev);
+    if (hapticsEnabled) {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
   };
 
   const formatMs = (ms: number) => {
