@@ -29,14 +29,15 @@ const otaServerUrl = resolveOtaServerUrl();
 function ClerkUserBridge() {
   const { user } = useUser();
   const client = useRemoteConfigClient();
+  const plan = (user?.publicMetadata?.plan as string | undefined) ?? "free";
 
   useEffect(() => {
     if (!user) return;
     const email = user.primaryEmailAddress?.emailAddress ?? "";
     const email_domain = email.includes("@") ? email.split("@")[1] : undefined;
-    const plan = (user.publicMetadata?.plan as string | undefined) ?? "free";
     client.setUserContext({ userId: user.id, email_domain, plan });
-  }, [user?.id]);
+    void client.refresh();
+  }, [user?.id, plan]);
 
   return null;
 }
