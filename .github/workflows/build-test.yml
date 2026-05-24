@@ -13,11 +13,17 @@ concurrency:
 env:
   EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   # ── Web export ────────────────────────────────────────────────────────────────
   build-web:
     name: Build (web)
     runs-on: ubuntu-latest
+    outputs:
+      artifact: web-dist-${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
 
@@ -27,6 +33,22 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
+
+      - name: Restore pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-${{ runner.os }}-
+
+      - name: Restore Expo / Metro cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .expo
+            node_modules/.cache/metro
+          key: expo-metro-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: expo-metro-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
 
       - run: pnpm install --frozen-lockfile
 
@@ -42,3 +64,198 @@ jobs:
           name: web-dist-${{ github.sha }}
           path: dist/
           retention-days: 7
+
+  # ── Android build (EAS) ───────────────────────────────────────────────────────
+  # Disabled: EAS free-tier build quota exhausted.
+  # Re-enable by removing `if: false` when quota resets or plan upgrades.
+  # Required secret: EXPO_TOKEN
+  build-android:
+    name: Build (android)
+    runs-on: ubuntu-latest
+    if: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Restore pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-${{ runner.os }}-
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: EAS Build (android preview)
+        run: eas build --platform android --profile preview --non-interactive --wait
+        env:
+          EAS_BUILD_AUTOCOMMIT: 1
+
+  # ── iOS build (EAS) ───────────────────────────────────────────────────────────
+  # Disabled: Apple Developer account required ($99/year).
+  # Required secrets: EXPO_TOKEN, EXPO_APPLE_ID, EXPO_APPLE_APP_SPECIFIC_PASSWORD
+  build-ios:
+    name: Build (ios)
+    runs-on: macos-14
+    if: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Restore pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/pnpm/store
+          key: pnpm-store-macos-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-macos-
+
+      - name: Restore CocoaPods cache
+        uses: actions/cache@v4
+        with:
+          path: ios/Pods
+          key: pods-${{ runner.os }}-${{ hashFiles('ios/Podfile.lock') }}
+          restore-keys: pods-${{ runner.os }}-
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: EAS Build (ios preview)
+        run: eas build --platform ios --profile preview --non-interactive --wait
+        env:
+          EAS_BUILD_AUTOCOMMIT: 1
+          EXPO_APPLE_ID: ${{ secrets.EXPO_APPLE_ID }}
+          EXPO_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.EXPO_APPLE_APP_SPECIFIC_PASSWORD }}
+
+  # ── E2E tests (web) ───────────────────────────────────────────────────────────
+  e2e-web:
+    name: E2E Tests (Web)
+    runs-on: ubuntu-latest
+    needs: build-web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Restore pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-${{ runner.os }}-
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Restore Playwright browser cache
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install Playwright + system deps
+        run: npx playwright install --with-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+
+      - name: Install Playwright system deps only (cache hit)
+        run: npx playwright install-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+
+      - name: Download web dist
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist-${{ github.sha }}
+          path: dist/
+
+      - name: Run E2E tests
+        run: |
+          sudo apt-get install -y xvfb -q
+          Xvfb :99 -screen 0 1920x1080x24 &
+          export DISPLAY=:99
+          npx serve dist -p 3000 &
+          npx wait-on http://localhost:3000 --timeout 30000
+          DISPLAY=:99 npx playwright test --project=chromium
+        env:
+          BASE_URL: http://localhost:3000
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-${{ github.sha }}
+          path: playwright-report/
+          retention-days: 7
+
+  # ── Performance snapshot ──────────────────────────────────────────────────────
+  perf-snapshot:
+    name: Performance Snapshot
+    runs-on: ubuntu-latest
+    needs: build-web
+    continue-on-error: true  # informational — flaky by nature, never blocks
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Restore pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-${{ runner.os }}-
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Download web dist
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist-${{ github.sha }}
+          path: dist/
+
+      - name: Run Lighthouse CI
+        run: |
+          npx serve ./dist -p 3000 --no-clipboard &
+          npx wait-on http://localhost:3000 --timeout 30000
+          pnpm dlx @lhci/cli autorun
+        env:
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+
+      - name: Upload Lighthouse results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lighthouse-${{ github.sha }}
+          path: .lighthouseci/
+          retention-days: 14

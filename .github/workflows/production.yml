@@ -3,28 +3,29 @@ name: Production Release
 on:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'   # v1.2.3
+      - 'v[0-9]+.[0-9]+.[0-9]+'
   workflow_dispatch:
     inputs:
       version:
         description: Version to release (e.g. 1.2.3)
         required: true
-      skip_stores:
-        description: Skip App Store / Play Store submission
-        type: boolean
-        default: false
       rollback_to:
         description: Version to rollback to (leave empty for normal release)
         required: false
 
 permissions:
   contents: write
+  issues: write
 
 env:
   EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
-  # ── Determine version ─────────────────────────────────────────────────────────
+  # ── Resolve version + rollback flag ──────────────────────────────────────────
   version:
     name: Resolve Version
     runs-on: ubuntu-latest
@@ -39,7 +40,6 @@ jobs:
 
       - id: ver
         run: |
-          # Resolve previous tag for rollback reference
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           echo "prev_version=${PREV_TAG#v}" >> $GITHUB_OUTPUT
 
@@ -50,13 +50,11 @@ jobs:
             echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
             echo "is_rollback=false" >> $GITHUB_OUTPUT
           else
-            # Strip 'v' prefix from tag
-            VERSION="${GITHUB_REF_NAME#v}"
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
             echo "is_rollback=false" >> $GITHUB_OUTPUT
           fi
 
-  # ── Changelog generation ──────────────────────────────────────────────────────
+  # ── Changelog ─────────────────────────────────────────────────────────────────
   changelog:
     name: Generate Changelog
     runs-on: ubuntu-latest
@@ -70,17 +68,15 @@ jobs:
           fetch-depth: 0
 
       - id: gen
-        name: Generate changelog from commits
+        name: Generate changelog from conventional commits
         run: |
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          if [ -z "$PREV_TAG" ]; then
-            RANGE="HEAD"
-          else
-            RANGE="${PREV_TAG}..HEAD"
-          fi
+          RANGE="${PREV_TAG:+${PREV_TAG}..HEAD}"
+          RANGE="${RANGE:-HEAD}"
 
-          CHANGELOG=$(git log $RANGE --pretty=format:"- %s (%h)" --no-merges | \
-            grep -E "^- (feat|fix|perf|refactor|chore):" || echo "- Internal improvements")
+          CHANGELOG=$(git log $RANGE --pretty=format:"- %s (%h)" --no-merges \
+            | grep -E "^- (feat|fix|perf|refactor|chore):" \
+            || echo "- Internal improvements")
 
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
           echo "$CHANGELOG" >> $GITHUB_OUTPUT
@@ -90,58 +86,52 @@ jobs:
         run: |
           VERSION="${{ needs.version.outputs.version }}"
           DATE=$(date +%Y-%m-%d)
-          ENTRY="## [$VERSION] - $DATE\n${{ steps.gen.outputs.changelog }}\n"
+          ENTRY="## [${VERSION}] - ${DATE}\n${{ steps.gen.outputs.changelog }}\n"
 
           if [ -f CHANGELOG.md ]; then
-            echo -e "$ENTRY\n$(cat CHANGELOG.md)" > CHANGELOG.md
+            printf '%s\n\n%s' "$ENTRY" "$(cat CHANGELOG.md)" > CHANGELOG.md
           else
-            echo -e "# Changelog\n\n$ENTRY" > CHANGELOG.md
+            printf '# Changelog\n\n%s' "$ENTRY" > CHANGELOG.md
           fi
 
       - uses: actions/upload-artifact@v4
         with:
           name: changelog-${{ needs.version.outputs.version }}
           path: CHANGELOG.md
+          retention-days: 30
 
-  # ── Bump version in app.json ──────────────────────────────────────────────────
-  # NOTE: app.json is NOT committed back to the repo.
-  # Source of truth for the release version is the git tag vX.Y.Z.
-  # Source of truth for native build numbers is EAS autoIncrement.
-  # app.json is bumped here only so downstream EAS build steps see the correct
-  # version string — it is uploaded as a CI artifact for audit purposes.
+  # ── Bump app.json (local only — not committed) ────────────────────────────────
   bump-version:
-    name: Bump app.json version
+    name: Bump app.json
     runs-on: ubuntu-latest
     needs: version
     if: needs.version.outputs.is_rollback == 'false'
     steps:
       - uses: actions/checkout@v4
 
-      - name: Update version in app.json (local only)
+      - name: Update version in app.json
         run: |
           VERSION="${{ needs.version.outputs.version }}"
           node -e "
             const fs = require('fs');
             const app = JSON.parse(fs.readFileSync('app.json', 'utf8'));
             app.expo.version = '$VERSION';
-            const parts = '$VERSION'.split('.').map(Number);
-            const buildNum = parts[0] * 10000 + parts[1] * 100 + parts[2];
+            const [maj, min, pat] = '$VERSION'.split('.').map(Number);
+            const build = maj * 10000 + min * 100 + pat;
             app.expo.ios = app.expo.ios || {};
             app.expo.android = app.expo.android || {};
-            app.expo.ios.buildNumber = String(buildNum);
-            app.expo.android.versionCode = buildNum;
+            app.expo.ios.buildNumber = String(build);
+            app.expo.android.versionCode = build;
             fs.writeFileSync('app.json', JSON.stringify(app, null, 2) + '\n');
           "
-          echo "app.json bumped to $VERSION (local workspace only — not committed)"
 
-      - name: Upload bumped app.json as artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: app-json-${{ needs.version.outputs.version }}
           path: app.json
           retention-days: 30
 
-  # ── OTA Update ────────────────────────────────────────────────────────────────
+  # ── OTA update (JS bundle) ────────────────────────────────────────────────────
   ota-update:
     name: OTA Update
     runs-on: ubuntu-latest
@@ -156,6 +146,13 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
+
+      - name: Restore pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-${{ runner.os }}-
 
       - run: pnpm install --frozen-lockfile
 
@@ -172,18 +169,13 @@ jobs:
             --branch production \
             --message "v${{ needs.version.outputs.version }}" \
             --non-interactive
-        env:
-          EAS_UPDATE_AUTO_ROLLBACK_THRESHOLD: 0.05  # 5% crash rate triggers rollback
 
       - name: Register release with custom OTA server
         continue-on-error: true
         run: |
-          # Extract release notes from annotated git tag (falls back to commit subject)
           TAG="v${{ needs.version.outputs.version }}"
           NOTES=$(git tag -l --format='%(contents)' "$TAG" 2>/dev/null | head -20)
-          if [ -z "$NOTES" ]; then
-            NOTES=$(git log -1 --pretty=format:"%s" 2>/dev/null || echo "Release $TAG")
-          fi
+          [ -z "$NOTES" ] && NOTES=$(git log -1 --pretty=format:"%s" 2>/dev/null || echo "Release $TAG")
           NOTES_JSON=$(echo "$NOTES" | jq -Rs '.')
 
           curl --fail -X POST "${{ secrets.OTA_SERVER_URL }}/api/releases" \
@@ -198,78 +190,12 @@ jobs:
               \"release_notes\": $NOTES_JSON
             }"
 
-  # ── Android → Play Store ──────────────────────────────────────────────────────
-  # SKIPPED: No Google Play Developer account ($25 one-time fee required).
-  # To enable: register at play.google.com/console, create a service account,
-  # add secret GOOGLE_SERVICE_ACCOUNT_KEY and remove the 'if: false' condition below.
-  release-android:
-    name: Play Store Release
-    runs-on: ubuntu-latest
-    needs: [version, bump-version]
-    if: false  # SKIPPED: No Google Play Developer account
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-
-      - uses: expo/expo-github-action@v8
-        with:
-          expo-version: latest
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
-
-      - name: Build + submit to Play Store (internal track)
-        run: eas build --platform android --profile production --non-interactive --wait --auto-submit
-        env:
-          EAS_BUILD_AUTOCOMMIT: 1
-          EXPO_GOOGLE_SERVICE_ACCOUNT_KEY: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}
-
-  # ── iOS → App Store ───────────────────────────────────────────────────────────
-  # SKIPPED: No Apple Developer account ($99/year required).
-  # To enable: add secrets EXPO_APPLE_ID, EXPO_APPLE_APP_SPECIFIC_PASSWORD,
-  # ASC_APP_ID, APPLE_TEAM_ID and remove the 'if: false' condition below.
-  release-ios:
-    name: App Store Release
-    runs-on: macos-14
-    needs: [version, bump-version]
-    if: false  # SKIPPED: No Apple Developer account
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-
-      - uses: expo/expo-github-action@v8
-        with:
-          expo-version: latest
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
-
-      - name: Build + submit to App Store
-        run: eas build --platform ios --profile staging --non-interactive --wait --auto-submit
-        env:
-          EAS_BUILD_AUTOCOMMIT: 1
-          EXPO_APPLE_ID: ${{ secrets.EXPO_APPLE_ID }}
-          EXPO_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.EXPO_APPLE_APP_SPECIFIC_PASSWORD }}
-
-  # ── Web → Production ──────────────────────────────────────────────────────────
+  # ── Web → Vercel production ───────────────────────────────────────────────────
   release-web:
     name: Web Production
     runs-on: ubuntu-latest
     needs: [version, bump-version]
+    if: needs.version.outputs.is_rollback == 'false'
     steps:
       - uses: actions/checkout@v4
 
@@ -279,6 +205,22 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
+
+      - name: Restore pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-${{ runner.os }}-
+
+      - name: Restore Expo / Metro cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .expo
+            node_modules/.cache/metro
+          key: expo-metro-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: expo-metro-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
 
       - run: pnpm install --frozen-lockfile
 
@@ -286,26 +228,114 @@ jobs:
         run: npx expo export --platform web --output-dir dist
         env:
           EXPO_NO_DOTENV: 1
-          NEXT_PUBLIC_API_URL: ${{ secrets.PROD_API_URL }}
-          NEXT_PUBLIC_OTA_SERVER: ${{ secrets.PROD_OTA_URL }}
-          NEXT_PUBLIC_CONFIG_SERVER: ${{ secrets.PROD_CONFIG_URL }}
+          EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          EXPO_PUBLIC_OTA_SERVER_URL: ${{ secrets.PROD_OTA_URL }}
 
-      # Vercel also auto-deploys to production via its GitHub App on push to master.
-      # This step is a manual override — continue if token not configured.
       - name: Deploy to Vercel (production)
         continue-on-error: true
-        run: |
-          pnpm dlx vercel deploy dist --prod --token "${{ secrets.VERCEL_TOKEN }}" --yes
+        run: pnpm dlx vercel deploy dist --prod --token "${{ secrets.VERCEL_TOKEN }}" --yes
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+  # ── Android → Firebase (production track) ────────────────────────────────────
+  # Disabled: EAS free-tier build quota exhausted.
+  # Required secrets: EXPO_TOKEN, FIREBASE_ANDROID_APP_ID, FIREBASE_SERVICE_ACCOUNT
+  release-android:
+    name: Android Production (Firebase)
+    runs-on: ubuntu-latest
+    needs: [version, bump-version]
+    if: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Restore pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-${{ runner.os }}-
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build Android (production) + Firebase distribute
+        run: eas build --platform android --profile production --non-interactive --wait
+        env:
+          EAS_BUILD_AUTOCOMMIT: 1
+
+      - name: Download APK and upload to Firebase
+        run: |
+          BUILD_URL=$(eas build:list --platform android --status finished --limit 1 --json \
+            | jq -r '.[0].artifacts.buildUrl')
+          curl -L "$BUILD_URL" -o rumik-production.apk
+
+      - uses: wzieba/Firebase-Distribution-Github-Action@v1
+        with:
+          appId: ${{ secrets.FIREBASE_ANDROID_APP_ID }}
+          serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          groups: production-testers
+          file: rumik-production.apk
+          releaseNotes: v${{ needs.version.outputs.version }}
+
+  # ── iOS → TestFlight (production) ─────────────────────────────────────────────
+  # Disabled: Apple Developer account required ($99/year).
+  # Required secrets: EXPO_TOKEN, EXPO_APPLE_ID, EXPO_APPLE_APP_SPECIFIC_PASSWORD
+  release-ios:
+    name: iOS Production (TestFlight)
+    runs-on: macos-14
+    needs: [version, bump-version]
+    if: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Restore pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/pnpm/store
+          key: pnpm-store-macos-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-macos-
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build iOS (production) + submit to TestFlight
+        run: eas build --platform ios --profile production --non-interactive --wait --auto-submit
+        env:
+          EAS_BUILD_AUTOCOMMIT: 1
+          EXPO_APPLE_ID: ${{ secrets.EXPO_APPLE_ID }}
+          EXPO_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.EXPO_APPLE_APP_SPECIFIC_PASSWORD }}
 
   # ── GitHub Release ────────────────────────────────────────────────────────────
   github-release:
     name: GitHub Release
     runs-on: ubuntu-latest
     needs: [version, changelog, ota-update]
-    if: always() && needs.version.outputs.is_rollback == 'false'
+    if: always() && needs.version.outputs.is_rollback == 'false' && needs.version.result == 'success'
     steps:
       - uses: actions/checkout@v4
 
@@ -320,8 +350,7 @@ jobs:
           script: |
             const fs = require('fs');
             const changelog = fs.readFileSync('CHANGELOG.md', 'utf8')
-              .split('\n').slice(0, 30).join('\n');  // first 30 lines
-
+              .split('\n').slice(0, 30).join('\n');
             await github.rest.repos.createRelease({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -332,20 +361,21 @@ jobs:
               prerelease: false
             });
 
-  # ── Automatic rollback trigger ────────────────────────────────────────────────
+  # ── Crash rate monitor + auto-rollback ───────────────────────────────────────
   rollback-monitor:
     name: Rollback Monitor
     runs-on: ubuntu-latest
     needs: [version, ota-update]
-    if: needs.ota-update.result == 'success'
+    if: needs.ota-update.result == 'success' && needs.version.outputs.is_rollback == 'false'
     steps:
-      - name: Poll crash rate for 20 minutes
+      - name: Poll crash rate (20 min window)
         run: |
           MAX_ATTEMPTS=10
           SLEEP_SECONDS=120
           THRESHOLD=0.05
 
-          echo "Monitoring crash rate (${MAX_ATTEMPTS} checks × ${SLEEP_SECONDS}s = 20 min)"
+          echo "Monitoring crash rate — ${MAX_ATTEMPTS} checks × ${SLEEP_SECONDS}s = 20 min"
+          echo "Rollback threshold: ${THRESHOLD} (${THRESHOLD}%)"
 
           for attempt in $(seq 1 $MAX_ATTEMPTS); do
             echo "--- Check ${attempt}/${MAX_ATTEMPTS} ---"
@@ -378,34 +408,28 @@ jobs:
             if [ "$EXCEEDED" = "yes" ]; then
               echo "::error::Crash rate ${CRASH_RATE} exceeds ${THRESHOLD} — triggering rollback"
 
+              # Pause the current rollout
               curl -sf -X POST \
                 "${{ secrets.OTA_SERVER_URL }}/api/releases/current/pause" \
                 -H "Authorization: Bearer ${{ secrets.OTA_API_KEY }}" \
                 -H "Content-Type: application/json" \
                 -d "{\"reason\":\"Auto-rollback: crash rate ${CRASH_RATE} exceeded ${THRESHOLD}\"}" || true
 
+              # Dispatch rollback workflow
               curl -X POST \
-                "https://api.github.com/repos/${{ github.repository }}/actions/workflows/production.yml/dispatches" \
+                "https://api.github.com/repos/${{ github.repository }}/actions/workflows/rollback.yml/dispatches" \
                 -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
                 -H "Content-Type: application/json" \
-                -d "{\"ref\":\"master\",\"inputs\":{\"rollback_to\":\"${{ needs.version.outputs.prev_version }}\",\"reason\":\"Auto-rollback: crash rate ${CRASH_RATE}\"}}" || true
+                -d "{\"ref\":\"master\",\"inputs\":{
+                  \"version\":\"${{ needs.version.outputs.prev_version }}\",
+                  \"reason\":\"Auto-rollback: crash rate ${CRASH_RATE} exceeded ${THRESHOLD}\",
+                  \"channels\":\"production\"
+                }}" || true
 
-              exit 1
-            fi
-
-            # Also exit early if the rollout scheduler already paused the release
-            PAUSED=$(curl -sf \
-              "${{ secrets.OTA_SERVER_URL }}/api/releases?channel=production&status=paused" \
-              -H "Authorization: Bearer ${{ secrets.OTA_API_KEY }}" \
-              | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('data',[])))" \
-              2>/dev/null || echo "0")
-
-            if [ "$PAUSED" != "0" ]; then
-              echo "::warning::Release paused by rollout scheduler — crash rate exceeded server-side threshold"
               exit 1
             fi
 
             echo "Check ${attempt}: OK (${CRASH_RATE} <= ${THRESHOLD})"
           done
 
-          echo "Monitoring complete — crash rate within threshold for full 20-minute window ✓"
+          echo "✓ Monitoring complete — crash rate within threshold for full 20-minute window"
