@@ -858,7 +858,8 @@ async function loadCrashTrendChart() {
     }));
 
     if (datasets.length === 0) {
-      document.getElementById('chart-crash-trend').parentElement.innerHTML =
+      const el = document.getElementById('chart-crash-trend');
+      if (el && el.parentElement) el.parentElement.innerHTML =
         '<p style="text-align:center;color:var(--text-muted);padding:32px 0">No crash data yet</p>';
       return;
     }
@@ -904,7 +905,8 @@ async function loadPerfTrendChart() {
     ];
 
     if (allBuckets.length === 0) {
-      document.getElementById('chart-perf-trend').parentElement.innerHTML =
+      const el = document.getElementById('chart-perf-trend');
+      if (el && el.parentElement) el.parentElement.innerHTML =
         '<p style="text-align:center;color:var(--text-muted);padding:32px 0">No perf data yet</p>';
       return;
     }
@@ -1126,7 +1128,7 @@ async function loadFunnelChart(releaseId) {
     const colors = ['#4f8ef7','#4f8ef7cc','#4f8ef799','#4f8ef766','#3ecf8e'];
 
     if (values[0] === 0) {
-      canvas.parentElement.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:32px 0">No adoption events yet for this release.</p>';
+      if (canvas && canvas.parentElement) canvas.parentElement.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:32px 0">No adoption events yet for this release.</p>';
       statsEl.innerHTML = '';
       return;
     }
@@ -1159,7 +1161,8 @@ async function loadVelocityChart(releaseId) {
     ];
 
     if (!data.length) {
-      document.getElementById('chart-velocity').parentElement.innerHTML =
+      const el = document.getElementById('chart-velocity');
+      if (el && el.parentElement) el.parentElement.innerHTML =
         '<p style="text-align:center;color:var(--text-muted);padding:32px 0">No velocity data yet.</p>';
       return;
     }

@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { PlayerProvider } from "../src/services/player";
 import { OtaProvider } from "../src/contexts/OtaContext";
 import { RemoteConfigProvider, useRemoteConfigClient } from "../src/hooks/useRemoteConfig";
+import { RemoteConfigPayloadProvider } from "../src/contexts/RemoteConfigContext";
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
 const otaServerUrl = process.env.EXPO_PUBLIC_OTA_SERVER_URL ?? "";
@@ -30,12 +31,14 @@ export default function RootLayout() {
     <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
       <ClerkLoaded>
         <RemoteConfigProvider serverUrl={otaServerUrl} apiKey={otaApiKey}>
-          <ClerkUserBridge />
-          <OtaProvider>
-            <PlayerProvider>
-              <Slot />
-            </PlayerProvider>
-          </OtaProvider>
+          <RemoteConfigPayloadProvider>
+            <ClerkUserBridge />
+            <OtaProvider>
+              <PlayerProvider>
+                <Slot />
+              </PlayerProvider>
+            </OtaProvider>
+          </RemoteConfigPayloadProvider>
         </RemoteConfigProvider>
       </ClerkLoaded>
     </ClerkProvider>
