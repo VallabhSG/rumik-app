@@ -13,7 +13,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Colors, Spacing, Radius, Typography } from "../theme/tokens";
 
-const STORAGE_KEY = "onboarding:shown_v2";
+const STORAGE_KEY = "onboarding:shown_v3";
 const { width } = Dimensions.get("window");
 
 const STEPS = [

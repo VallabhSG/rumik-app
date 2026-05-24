@@ -53,6 +53,7 @@ export default function HomeScreen() {
   const [newReleases, setNewReleases] = useState<DeezerTrack[]>([]);
   const greetingStyle = useExperiment("tagline_test", "control");
   const chartLimit = parseInt(useExperiment("chart_limit", "8"), 10);
+  const homeLayout = useExperiment("home_layout", "control");
   const [activeGenre, setActiveGenre] = useState<string>("All");
 
   const userId = user?.id ?? "";
@@ -219,17 +220,73 @@ export default function HomeScreen() {
         {chartList.length > 0 && (
           <>
             <SectionLabel>CHARTS</SectionLabel>
-            {chartList.map((track, i) => (
-              <TrackRow
-                key={track.id}
-                track={track}
-                onPlay={handlePlay}
-                rank={i + 2}
-                isLiked={likedIds.has(track.id)}
-                onLike={handleLike}
-                showLike
-              />
-            ))}
+
+            {homeLayout === "grid" && (
+              <View style={styles.grid}>
+                {chartList.map((track, i) => (
+                  <TouchableOpacity
+                    key={track.id}
+                    style={styles.gridCell}
+                    onPress={() => handlePlay(track)}
+                    activeOpacity={0.8}
+                  >
+                    <Image
+                      source={{ uri: track.album.cover_medium }}
+                      style={styles.gridCover}
+                    />
+                    <Text style={styles.gridRank}>#{i + 2}</Text>
+                    <Text style={styles.gridTitle} numberOfLines={1}>
+                      {track.title}
+                    </Text>
+                    <Text style={styles.gridArtist} numberOfLines={1}>
+                      {track.artist.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {homeLayout === "horizontal" && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.horizontalScroll}
+              >
+                {chartList.map((track, i) => (
+                  <TouchableOpacity
+                    key={track.id}
+                    style={styles.horizontalCard}
+                    onPress={() => handlePlay(track)}
+                    activeOpacity={0.8}
+                  >
+                    <Image
+                      source={{ uri: track.album.cover_medium }}
+                      style={styles.horizontalCover}
+                    />
+                    <Text style={styles.gridRank}>#{i + 2}</Text>
+                    <Text style={styles.gridTitle} numberOfLines={1}>
+                      {track.title}
+                    </Text>
+                    <Text style={styles.gridArtist} numberOfLines={1}>
+                      {track.artist.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+
+            {(homeLayout === "control" || !["grid", "horizontal"].includes(homeLayout)) &&
+              chartList.map((track, i) => (
+                <TrackRow
+                  key={track.id}
+                  track={track}
+                  onPlay={handlePlay}
+                  rank={i + 2}
+                  isLiked={likedIds.has(track.id)}
+                  onLike={handleLike}
+                  showLike
+                />
+              ))}
           </>
         )}
       </ScrollView>
@@ -261,6 +318,54 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 6,
     marginTop: Spacing.md,
+  },
+  grid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  gridCell: {
+    width: "48%",
+  },
+  gridCover: {
+    width: "100%",
+    aspectRatio: 1,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.muted,
+    marginBottom: 4,
+  },
+  gridRank: {
+    ...Typography.caption,
+    fontSize: 10,
+    color: Colors.accent,
+    fontWeight: "700",
+  },
+  gridTitle: {
+    ...Typography.body,
+    fontSize: 12,
+    fontWeight: "600",
+    color: Colors.text,
+  },
+  gridArtist: {
+    ...Typography.caption,
+    fontSize: 11,
+    color: Colors.textSecondary,
+    marginTop: 1,
+  },
+  horizontalScroll: {
+    gap: Spacing.sm,
+    paddingBottom: Spacing.sm,
+  },
+  horizontalCard: {
+    width: 130,
+  },
+  horizontalCover: {
+    width: 130,
+    height: 130,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.muted,
+    marginBottom: 4,
   },
   newReleasesScroll: {
     gap: Spacing.sm,
