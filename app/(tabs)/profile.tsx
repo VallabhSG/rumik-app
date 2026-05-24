@@ -47,7 +47,9 @@ export default function ProfileScreen() {
       if (user?.id) {
         getLiked(user.id).then((t) => setLikedCount(t.length));
       }
-      getInstallId().then(setInstallId).catch(() => {});
+      getInstallId()
+        .then(setInstallId)
+        .catch(() => {});
     }, [user]),
   );
 
@@ -57,14 +59,17 @@ export default function ProfileScreen() {
   };
 
   const version = Constants.expoConfig?.version ?? "—";
-  const plan = ((user?.publicMetadata?.plan as string | undefined) ?? "free").toLowerCase();
+  const plan = (
+    (user?.publicMetadata?.plan as string | undefined) ?? "free"
+  ).toLowerCase();
   const memberSince = user?.createdAt
     ? new Date(user.createdAt).toLocaleDateString(undefined, {
         month: "short",
         year: "numeric",
       })
     : "—";
-  const emailVerified = user?.primaryEmailAddress?.verification?.status === "verified";
+  const emailVerified =
+    user?.primaryEmailAddress?.verification?.status === "verified";
 
   // Active flags and experiment assignments from live remote config
   const activeFlags = Object.entries(config.flags)
@@ -112,8 +117,15 @@ export default function ProfileScreen() {
         <View style={styles.infoCard}>
           <InfoRow label="Plan" value={plan} accent />
           <InfoRow label="Member since" value={memberSince} />
-          <InfoRow label="Email verified" value={emailVerified ? "Yes" : "No"} />
-          <InfoRow label="User ID" value={user?.id ? user.id.slice(0, 18) + "…" : "—"} mono />
+          <InfoRow
+            label="Email verified"
+            value={emailVerified ? "Yes" : "No"}
+          />
+          <InfoRow
+            label="User ID"
+            value={user?.id ? user.id.slice(0, 18) + "…" : "—"}
+            mono
+          />
         </View>
 
         {/* ── App ── */}
@@ -125,14 +137,20 @@ export default function ProfileScreen() {
             value={otaStatus === "idle" ? "dev" : "production"}
           />
           <InfoRow label="Update Status" value={otaStatus} />
-          <InfoRow label="Install ID" value={installId.slice(0, 18) + "…"} mono />
+          <InfoRow
+            label="Install ID"
+            value={installId.slice(0, 18) + "…"}
+            mono
+          />
         </View>
 
         {/* ── Live Remote Config ── */}
         <Text style={styles.sectionLabel}>REMOTE CONFIG</Text>
         <View style={styles.infoCard}>
           {activeFlags.length === 0 ? (
-            <Text style={styles.emptyNote}>No flags enabled for your device</Text>
+            <Text style={styles.emptyNote}>
+              No flags enabled for your device
+            </Text>
           ) : (
             activeFlags.map((key) => (
               <View key={key} style={styles.flagRow}>
@@ -143,9 +161,7 @@ export default function ProfileScreen() {
             ))
           )}
 
-          {experimentEntries.length > 0 && (
-            <View style={styles.divider} />
-          )}
+          {experimentEntries.length > 0 && <View style={styles.divider} />}
 
           {experimentEntries.map(([key, assignment]) => (
             <View key={key} style={styles.flagRow}>
@@ -239,7 +255,11 @@ const styles = StyleSheet.create({
     color: Colors.text,
     marginBottom: 3,
   },
-  email: { ...Typography.caption, color: Colors.textSecondary, marginBottom: Spacing.sm },
+  email: {
+    ...Typography.caption,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.sm,
+  },
   planBadge: {
     borderWidth: 1,
     borderRadius: 20,

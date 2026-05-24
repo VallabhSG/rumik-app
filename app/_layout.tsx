@@ -4,7 +4,11 @@ import { Slot } from "expo-router";
 import { useEffect } from "react";
 import { PlayerProvider } from "../src/services/player";
 import { OtaProvider } from "../src/contexts/OtaContext";
-import { RemoteConfigProvider, useRemoteConfigClient, useFeatureFlag } from "../src/hooks/useRemoteConfig";
+import {
+  RemoteConfigProvider,
+  useRemoteConfigClient,
+  useFeatureFlag,
+} from "../src/hooks/useRemoteConfig";
 import { RemoteConfigPayloadProvider } from "../src/contexts/RemoteConfigContext";
 import { OnboardingModal } from "../src/components/OnboardingModal";
 import Constants from "expo-constants";
@@ -35,7 +39,9 @@ function OnboardingGate() {
 function ClerkUserBridge() {
   const { user } = useUser();
   const client = useRemoteConfigClient();
-  const plan = ((user?.publicMetadata?.plan as string | undefined) ?? "free").toLowerCase();
+  const plan = (
+    (user?.publicMetadata?.plan as string | undefined) ?? "free"
+  ).toLowerCase();
 
   useEffect(() => {
     if (!user) return;

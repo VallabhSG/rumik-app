@@ -1,7 +1,10 @@
 import { useCallback } from "react";
 import { useRemoteConfigClient } from "./useRemoteConfig";
 
-export function useExperimentTracking(experimentKey: string, variantId: string | null) {
+export function useExperimentTracking(
+  experimentKey: string,
+  variantId: string | null,
+) {
   const client = useRemoteConfigClient();
 
   const trackExposure = useCallback(
@@ -21,7 +24,12 @@ export function useExperimentTracking(experimentKey: string, variantId: string |
   );
 
   const trackConversion = useCallback(
-    async (installId: string, eventName: string, value = 1, userId?: string) => {
+    async (
+      installId: string,
+      eventName: string,
+      value = 1,
+      userId?: string,
+    ) => {
       if (!variantId) return;
       try {
         await client.trackConversion(experimentKey, {

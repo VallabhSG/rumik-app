@@ -1,7 +1,12 @@
 import { Platform } from "react-native";
 import { configStorage } from "./storage";
 import { WsClient } from "./wsClient";
-import type { RemoteConfig, ConfigClientOptions, ConfigStatus, UserContext } from "./types";
+import type {
+  RemoteConfig,
+  ConfigClientOptions,
+  ConfigStatus,
+  UserContext,
+} from "./types";
 
 const EMPTY_CONFIG: RemoteConfig = {
   flags: {},
@@ -190,11 +195,16 @@ export class ConfigClient {
         native_version: this.options.nativeVersion,
         install_id: this.options.installId,
       });
-      if (this.userContext.userId) params.set("user_id", this.userContext.userId);
+      if (this.userContext.userId)
+        params.set("user_id", this.userContext.userId);
       if (this.userContext.plan) params.set("plan", this.userContext.plan);
-      if (this.userContext.email_domain) params.set("email_domain", this.userContext.email_domain);
+      if (this.userContext.email_domain)
+        params.set("email_domain", this.userContext.email_domain);
       if (this.userContext.account_age_days !== undefined) {
-        params.set("account_age_days", String(this.userContext.account_age_days));
+        params.set(
+          "account_age_days",
+          String(this.userContext.account_age_days),
+        );
       }
 
       const res = await fetch(

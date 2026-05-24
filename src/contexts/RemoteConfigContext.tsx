@@ -1,6 +1,16 @@
-import React, { createContext, useCallback, useContext, useRef, useSyncExternalStore } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useRef,
+  useSyncExternalStore,
+} from "react";
 import { useRemoteConfigClient } from "../hooks/useRemoteConfig";
-import type { ConfigPayload, ExperimentAssignment, UserContext } from "../services/config/types";
+import type {
+  ConfigPayload,
+  ExperimentAssignment,
+  UserContext,
+} from "../services/config/types";
 
 // ---------------------------------------------------------------------------
 // Context shape
@@ -29,7 +39,9 @@ const RemoteConfigContext = createContext<RemoteConfigContextValue>({
 // Helper — map RemoteConfig → ConfigPayload
 // ---------------------------------------------------------------------------
 
-function toConfigPayload(client: ReturnType<typeof useRemoteConfigClient>): ConfigPayload {
+function toConfigPayload(
+  client: ReturnType<typeof useRemoteConfigClient>,
+): ConfigPayload {
   // The underlying RemoteConfig uses:
   //   experiments: Record<string, string>  (variant id strings)
   //   urls: Record<string, string>
@@ -42,7 +54,16 @@ function toConfigPayload(client: ReturnType<typeof useRemoteConfigClient>): Conf
   //   kill_switches: string[]  (only the active ones)
   //   flags: Record<string, boolean>
 
-  const raw = (client as unknown as { config: { flags: Record<string, boolean>; experiments: Record<string, string>; urls: Record<string, string>; kill_switches: Record<string, boolean> } }).config;
+  const raw = (
+    client as unknown as {
+      config: {
+        flags: Record<string, boolean>;
+        experiments: Record<string, string>;
+        urls: Record<string, string>;
+        kill_switches: Record<string, boolean>;
+      };
+    }
+  ).config;
 
   // Build ExperimentAssignment map from flat string experiments
   const experiments: Record<string, ExperimentAssignment> = {};
@@ -67,7 +88,11 @@ function toConfigPayload(client: ReturnType<typeof useRemoteConfigClient>): Conf
 // Provider — wraps the existing ConfigClientContext
 // ---------------------------------------------------------------------------
 
-export function RemoteConfigPayloadProvider({ children }: { children: React.ReactNode }) {
+export function RemoteConfigPayloadProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const client = useRemoteConfigClient();
 
   // useSyncExternalStore requires getSnapshot to return a stable reference when

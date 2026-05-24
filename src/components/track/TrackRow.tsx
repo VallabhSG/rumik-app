@@ -1,5 +1,12 @@
 import React from "react";
-import { View, Text, Image, TouchableOpacity, StyleSheet, Share } from "react-native";
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  StyleSheet,
+  Share,
+} from "react-native";
 import { Colors, Typography, Spacing, Radius } from "../../theme/tokens";
 import type { DeezerTrack } from "../../services/deezer";
 import { useFlag } from "../../contexts/RemoteConfigContext";
@@ -13,7 +20,10 @@ interface Props {
   showLike?: boolean;
 }
 
-async function handleShare(trackName: string, artistName: string): Promise<void> {
+async function handleShare(
+  trackName: string,
+  artistName: string,
+): Promise<void> {
   await Share.share({
     message: `🎵 Listening to "${trackName}" by ${artistName} on Rumik`,
   });

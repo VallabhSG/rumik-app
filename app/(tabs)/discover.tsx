@@ -94,7 +94,11 @@ export default function DiscoverScreen() {
           <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
             style={styles.searchInput}
-            placeholder={searchPromptVariant === "variant_a" ? "What are you feeling like?" : "Search artists, tracks…"}
+            placeholder={
+              searchPromptVariant === "variant_a"
+                ? "What are you feeling like?"
+                : "Search artists, tracks…"
+            }
             placeholderTextColor={Colors.textSecondary}
             value={query}
             onChangeText={handleSearch}

@@ -15,7 +15,10 @@ import { usePlayer } from "../../services/player";
 import { useUser } from "@clerk/clerk-expo";
 import { toggleLike, isLiked as checkIsLiked } from "../../services/library";
 import { Colors, Typography, Spacing, Radius } from "../../theme/tokens";
-import { useFlag, useExperimentVariant } from "../../contexts/RemoteConfigContext";
+import {
+  useFlag,
+  useExperimentVariant,
+} from "../../contexts/RemoteConfigContext";
 import { downloadTrack, isDownloaded } from "../../services/offline";
 import * as Haptics from "expo-haptics";
 
@@ -84,10 +87,16 @@ export function NowPlaying({ visible, onClose }: Props) {
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={[styles.container, isImmersive && styles.containerImmersive]} {...panResponder.panHandlers}>
+      <View
+        style={[styles.container, isImmersive && styles.containerImmersive]}
+        {...panResponder.panHandlers}
+      >
         <View style={styles.handle} />
 
-        <Image source={{ uri: track.album.cover_medium }} style={[styles.art, isImmersive && styles.artImmersive]} />
+        <Image
+          source={{ uri: track.album.cover_medium }}
+          style={[styles.art, isImmersive && styles.artImmersive]}
+        />
 
         <View style={styles.info}>
           <Text style={styles.title}>{track.title}</Text>
@@ -97,7 +106,7 @@ export function NowPlaying({ visible, onClose }: Props) {
             <TouchableOpacity
               onPress={() => {
                 const lyricsUrl = `https://genius.com/search?q=${encodeURIComponent(
-                  track.title + " " + track.artist.name
+                  track.title + " " + track.artist.name,
                 )}`;
                 void Linking.openURL(lyricsUrl);
               }}

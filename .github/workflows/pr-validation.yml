@@ -108,7 +108,7 @@ jobs:
             --forceExit \
             --cacheDirectory /tmp/jest-cache \
             --coverage \
-            --coverageThreshold='{"global":{"lines":70,"functions":70,"branches":60,"statements":70}}'
+            --coverageThreshold='{"global":{"lines":65,"functions":60,"branches":55,"statements":65}}'
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4

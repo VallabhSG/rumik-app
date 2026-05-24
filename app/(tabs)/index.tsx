@@ -275,7 +275,8 @@ export default function HomeScreen() {
               </ScrollView>
             )}
 
-            {(homeLayout === "control" || !["grid", "horizontal"].includes(homeLayout)) &&
+            {(homeLayout === "control" ||
+              !["grid", "horizontal"].includes(homeLayout)) &&
               chartList.map((track, i) => (
                 <TrackRow
                   key={track.id}
