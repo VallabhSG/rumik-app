@@ -6,10 +6,25 @@ import { PlayerProvider } from "../src/services/player";
 import { OtaProvider } from "../src/contexts/OtaContext";
 import { RemoteConfigProvider, useRemoteConfigClient } from "../src/hooks/useRemoteConfig";
 import { RemoteConfigPayloadProvider } from "../src/contexts/RemoteConfigContext";
+import Constants from "expo-constants";
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
-const otaServerUrl = process.env.EXPO_PUBLIC_OTA_SERVER_URL ?? "";
 const otaApiKey = process.env.EXPO_PUBLIC_OTA_API_KEY ?? "";
+
+// In development, derive the OTA host from Expo's manifest so the correct
+// machine IP is used automatically on physical devices and emulators.
+function resolveOtaServerUrl(): string {
+  const envUrl = process.env.EXPO_PUBLIC_OTA_SERVER_URL ?? "";
+  if (!__DEV__) return envUrl;
+  const hostUri = Constants.expoConfig?.hostUri; // e.g. "192.168.1.5:8081"
+  if (hostUri) {
+    const host = hostUri.split(":")[0];
+    return `http://${host}:4000`;
+  }
+  return envUrl;
+}
+
+const otaServerUrl = resolveOtaServerUrl();
 
 function ClerkUserBridge() {
   const { user } = useUser();
