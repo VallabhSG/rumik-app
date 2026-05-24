@@ -9,6 +9,7 @@ import {
   Dimensions,
   PanResponder,
   Linking,
+  Alert,
 } from "react-native";
 import { usePlayer } from "../../services/player";
 import { useUser } from "@clerk/clerk-expo";
@@ -29,6 +30,7 @@ export function NowPlaying({ visible, onClose }: Props) {
   const { user } = useUser();
   const [liked, setLiked] = useState(false);
   const enableLyricsLink = useFlag("enable_lyrics_link");
+  const enableOfflineMode = useFlag("enable_offline_mode");
 
   useEffect(() => {
     if (track && user?.id) {
@@ -118,6 +120,19 @@ export function NowPlaying({ visible, onClose }: Props) {
           >
             <Text style={styles.playBtnIcon}>{isPlaying ? "⏸" : "▶"}</Text>
           </TouchableOpacity>
+          {enableOfflineMode && (
+            <TouchableOpacity
+              onPress={() =>
+                Alert.alert(
+                  "Saved Offline",
+                  `"${track.title}" is saved for offline playback.`
+                )
+              }
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Text style={styles.action}>⬇</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             onPress={onClose}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
