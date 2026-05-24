@@ -9,13 +9,16 @@ import {
   Dimensions,
   PanResponder,
   Linking,
-  Alert,
+  ActivityIndicator,
 } from "react-native";
 import { usePlayer } from "../../services/player";
 import { useUser } from "@clerk/clerk-expo";
 import { toggleLike, isLiked as checkIsLiked } from "../../services/library";
 import { Colors, Typography, Spacing, Radius } from "../../theme/tokens";
 import { useFlag, useExperimentVariant } from "../../contexts/RemoteConfigContext";
+import { downloadTrack, isDownloaded } from "../../services/offline";
+
+type DownloadStatus = "idle" | "downloading" | "downloaded";
 
 const { width } = Dimensions.get("window");
 
@@ -29,6 +32,8 @@ export function NowPlaying({ visible, onClose }: Props) {
     usePlayer();
   const { user } = useUser();
   const [liked, setLiked] = useState(false);
+  const [downloadStatus, setDownloadStatus] = useState<DownloadStatus>("idle");
+  const [downloadProgress, setDownloadProgress] = useState(0);
   const enableLyricsLink = useFlag("enable_lyrics_link");
   const enableOfflineMode = useFlag("enable_offline_mode");
   const playerUiVariant = useExperimentVariant("player_ui");
@@ -39,6 +44,15 @@ export function NowPlaying({ visible, onClose }: Props) {
       checkIsLiked(user.id, track.id).then(setLiked);
     }
   }, [track, user?.id]);
+
+  useEffect(() => {
+    if (!track) return;
+    setDownloadStatus("idle");
+    setDownloadProgress(0);
+    isDownloaded(track.id).then((already) => {
+      if (already) setDownloadStatus("downloaded");
+    });
+  }, [track?.id]);
 
   const panResponder = PanResponder.create({
     onMoveShouldSetPanResponder: (_, g) => g.dy > 10,
@@ -124,15 +138,37 @@ export function NowPlaying({ visible, onClose }: Props) {
           </TouchableOpacity>
           {enableOfflineMode && (
             <TouchableOpacity
-              onPress={() =>
-                Alert.alert(
-                  "Saved Offline",
-                  `"${track.title}" is saved for offline playback.`
-                )
-              }
+              onPress={async () => {
+                if (downloadStatus !== "idle") return;
+                setDownloadStatus("downloading");
+                setDownloadProgress(0);
+                try {
+                  await downloadTrack(track, (p) => setDownloadProgress(p));
+                  setDownloadStatus("downloaded");
+                } catch {
+                  setDownloadStatus("idle");
+                }
+              }}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              disabled={downloadStatus !== "idle"}
             >
-              <Text style={styles.action}>⬇</Text>
+              {downloadStatus === "downloading" ? (
+                <View style={styles.downloadingWrap}>
+                  <ActivityIndicator size="small" color={Colors.accent} />
+                  <Text style={styles.downloadPct}>
+                    {Math.round(downloadProgress * 100)}%
+                  </Text>
+                </View>
+              ) : (
+                <Text
+                  style={[
+                    styles.action,
+                    downloadStatus === "downloaded" && styles.actionActive,
+                  ]}
+                >
+                  {downloadStatus === "downloaded" ? "✓" : "⬇"}
+                </Text>
+              )}
             </TouchableOpacity>
           )}
           <TouchableOpacity
@@ -227,6 +263,8 @@ const styles = StyleSheet.create({
   },
   action: { fontSize: 24, color: Colors.muted },
   actionActive: { color: Colors.accent },
+  downloadingWrap: { alignItems: "center", gap: 2 },
+  downloadPct: { fontSize: 9, color: Colors.accent, fontWeight: "700" },
   playBtn: {
     width: 64,
     height: 64,
