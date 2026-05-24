@@ -1,7 +1,8 @@
 import React from "react";
-import { View, Text, Image, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, Image, TouchableOpacity, StyleSheet, Share } from "react-native";
 import { Colors, Typography, Spacing, Radius } from "../../theme/tokens";
 import type { DeezerTrack } from "../../services/deezer";
+import { useFlag } from "../../contexts/RemoteConfigContext";
 
 interface Props {
   track: DeezerTrack;
@@ -12,6 +13,12 @@ interface Props {
   showLike?: boolean;
 }
 
+async function handleShare(trackName: string, artistName: string): Promise<void> {
+  await Share.share({
+    message: `🎵 Listening to "${trackName}" by ${artistName} on Rumik`,
+  });
+}
+
 export function TrackRow({
   track,
   onPlay,
@@ -20,6 +27,7 @@ export function TrackRow({
   onLike,
   showLike,
 }: Props) {
+  const enableSocialShare = useFlag("enable_social_share");
   return (
     <View style={styles.row}>
       {rank !== undefined && <Text style={styles.rank}>#{rank}</Text>}
@@ -39,6 +47,15 @@ export function TrackRow({
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Text style={[styles.heart, isLiked && styles.heartActive]}>♥</Text>
+        </TouchableOpacity>
+      )}
+      {enableSocialShare && (
+        <TouchableOpacity
+          onPress={() => handleShare(track.title, track.artist.name)}
+          style={styles.action}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={styles.shareIcon}>⬆️</Text>
         </TouchableOpacity>
       )}
       <TouchableOpacity
@@ -73,6 +90,7 @@ const styles = StyleSheet.create({
   artist: { ...Typography.caption, color: Colors.textSecondary, marginTop: 2 },
   action: { paddingHorizontal: Spacing.xs },
   playIcon: { fontSize: 14, color: Colors.accent },
+  shareIcon: { fontSize: 18 },
   heart: { fontSize: 16, color: Colors.muted },
   heartActive: { color: Colors.accent },
 });

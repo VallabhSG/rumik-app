@@ -1,7 +1,7 @@
 import { Platform } from "react-native";
 import { configStorage } from "./storage";
 import { WsClient } from "./wsClient";
-import type { RemoteConfig, ConfigClientOptions, ConfigStatus } from "./types";
+import type { RemoteConfig, ConfigClientOptions, ConfigStatus, UserContext } from "./types";
 
 const EMPTY_CONFIG: RemoteConfig = {
   flags: {},
@@ -35,6 +35,7 @@ export class ConfigClient {
   private listeners = new Set<() => void>();
   private ttlTimer: ReturnType<typeof setTimeout> | null = null;
   private ws: WsClient | null = null;
+  private userContext: UserContext = {};
 
   constructor(options: ConfigClientOptions) {
     this.options = options;
@@ -130,9 +131,50 @@ export class ConfigClient {
     this.options.installId = id;
   }
 
+  /** Set user context for targeted config delivery. Call before or after initialize(). */
+  setUserContext(ctx: UserContext): void {
+    this.userContext = ctx;
+  }
+
   /** Force a re-fetch from the server. */
   async refresh(): Promise<void> {
     await this.fetchAndUpdate();
+  }
+
+  async trackExposure(
+    experimentKey: string,
+    body: { install_id: string; variant_id: string; user_id?: string },
+  ): Promise<void> {
+    if (!this.options.serverUrl) return;
+    await fetch(
+      `${this.options.serverUrl}/api/experiments/${experimentKey}/expose`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
+  }
+
+  async trackConversion(
+    experimentKey: string,
+    body: {
+      install_id: string;
+      variant_id: string;
+      event_name: string;
+      value?: number;
+      user_id?: string;
+    },
+  ): Promise<void> {
+    if (!this.options.serverUrl) return;
+    await fetch(
+      `${this.options.serverUrl}/api/experiments/${experimentKey}/convert`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -148,6 +190,12 @@ export class ConfigClient {
         native_version: this.options.nativeVersion,
         install_id: this.options.installId,
       });
+      if (this.userContext.userId) params.set("user_id", this.userContext.userId);
+      if (this.userContext.plan) params.set("plan", this.userContext.plan);
+      if (this.userContext.email_domain) params.set("email_domain", this.userContext.email_domain);
+      if (this.userContext.account_age_days !== undefined) {
+        params.set("account_age_days", String(this.userContext.account_age_days));
+      }
 
       const res = await fetch(
         `${this.options.serverUrl}/api/config?${params.toString()}`,

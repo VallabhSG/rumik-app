@@ -23,9 +23,28 @@ export interface ConfigClientOptions {
 
 export type ConfigStatus = "loading" | "ready" | "error" | "stale";
 
+export interface UserContext {
+  userId?: string;
+  plan?: string;
+  email_domain?: string;
+  account_age_days?: number;
+}
+
 export interface WsMessage {
   type: "authenticated" | "kill_switch" | "ping";
   key?: string;
   active?: boolean;
   reason?: string | null;
+}
+
+export interface ExperimentAssignment {
+  variant_id: string;
+  experiment_key: string;
+}
+
+export interface ConfigPayload {
+  flags: Record<string, boolean>;
+  remote_urls: Record<string, string>;
+  experiments: Record<string, ExperimentAssignment>;
+  kill_switches: string[];
 }

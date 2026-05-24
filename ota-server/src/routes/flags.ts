@@ -76,7 +76,7 @@ router.post('/', (req, res) => {
     throw err;
   }
 
-  logChange('flag', id, 'created', null);
+  logChange('flag', id, 'created', null, res.locals.actor as string);
   const row = db.prepare('SELECT * FROM feature_flags WHERE id = ?').get(id) as FlagRow;
   return res.status(201).json({ success: true, data: parseFlag(row) });
 });
@@ -107,7 +107,7 @@ router.patch('/:id', (req, res) => {
   logChange('flag', req.params.id, 'updated', diffObjects(
     { enabled: existing.enabled, description: existing.description, targeting: existing.targeting },
     { enabled: updated.enabled, description: updated.description, targeting: updated.targeting },
-  ));
+  ), res.locals.actor as string);
   return res.json({ success: true, data: parseFlag(updated) });
 });
 
@@ -117,7 +117,7 @@ router.delete('/:id', (req, res) => {
   if (!existing) return res.status(404).json({ success: false, error: 'Flag not found' });
 
   db.prepare('DELETE FROM feature_flags WHERE id = ?').run(req.params.id);
-  logChange('flag', req.params.id, 'deleted', null);
+  logChange('flag', req.params.id, 'deleted', null, res.locals.actor as string);
   return res.json({ success: true, data: null });
 });
 

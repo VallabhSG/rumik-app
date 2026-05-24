@@ -3,7 +3,7 @@ import { z } from 'zod';
 import db from '../db.js';
 import { djb2 } from '../utils/hash.js';
 import { evaluateTargeting, parseTargeting } from '../services/targeting.js';
-import type { DeviceContext } from '../services/targeting.js';
+import type { DeviceContext, UserContext } from '../services/targeting.js';
 
 const router = Router();
 
@@ -11,12 +11,16 @@ const QuerySchema = z.object({
   platform: z.enum(['ios', 'android', 'web']),
   native_version: z.string().min(1),
   install_id: z.string().min(1),
+  user_id: z.string().optional(),
+  plan: z.string().optional(),
+  email_domain: z.string().optional(),
+  account_age_days: z.coerce.number().optional(),
 });
 
 interface FlagRow { id: string; key: string; enabled: number; targeting: string | null; }
 interface ExperimentRow { id: string; key: string; status: string; variants: string; targeting: string | null; }
 interface UrlRow { id: string; key: string; value: string; targeting: string | null; }
-interface KillSwitchRow { id: string; key: string; active: number; }
+interface KillSwitchRow { id: string; key: string; active: number; targeting: string | null; }
 interface AssignmentRow { variant_id: string; }
 
 /**
@@ -29,15 +33,22 @@ router.get('/', (req, res) => {
   if (!result.success) {
     return res.status(400).json({ success: false, error: result.error.flatten() });
   }
-  const { platform, native_version, install_id } = result.data;
+  const { platform, native_version, install_id, user_id, plan, email_domain, account_age_days } = result.data;
+
+  const userCtx: UserContext = {
+    userId: user_id,
+    plan,
+    email_domain,
+    account_age_days,
+  };
 
   // ── Feature flags ──────────────────────────────────────────────────────────
   const flagRows = db.prepare('SELECT id, key, enabled, targeting FROM feature_flags').all() as FlagRow[];
   const flags: Record<string, boolean> = {};
   for (const flag of flagRows) {
-    const ctx: DeviceContext = { platform, nativeVersion: native_version, installId: install_id, entityKey: flag.key };
-    const inTargeting = evaluateTargeting(parseTargeting(flag.targeting), ctx);
-    flags[flag.key] = flag.enabled === 1 && inTargeting;
+    const rule = parseTargeting(flag.targeting);
+    const deviceCtx: DeviceContext = { platform, nativeVersion: native_version, installId: install_id, entityKey: flag.key };
+    flags[flag.key] = flag.enabled === 1 && evaluateTargeting(rule, deviceCtx, userCtx, db);
   }
 
   // ── Experiments ────────────────────────────────────────────────────────────
@@ -45,7 +56,7 @@ router.get('/', (req, res) => {
   const experiments: Record<string, string> = {};
   for (const exp of expRows) {
     const ctx: DeviceContext = { platform, nativeVersion: native_version, installId: install_id, entityKey: exp.key };
-    if (!evaluateTargeting(parseTargeting(exp.targeting), ctx)) continue;
+    if (!evaluateTargeting(parseTargeting(exp.targeting), ctx, userCtx, db)) continue;
 
     // Check for existing stable assignment
     const existing = db.prepare(
@@ -84,16 +95,21 @@ router.get('/', (req, res) => {
   const urls: Record<string, string> = {};
   for (const url of urlRows) {
     const ctx: DeviceContext = { platform, nativeVersion: native_version, installId: install_id, entityKey: url.key };
-    if (evaluateTargeting(parseTargeting(url.targeting), ctx)) {
+    if (evaluateTargeting(parseTargeting(url.targeting), ctx, userCtx, db)) {
       urls[url.key] = url.value;
     }
   }
 
   // ── Kill switches ─────────────────────────────────────────────────────────
-  const ksRows = db.prepare('SELECT key, active FROM kill_switches').all() as KillSwitchRow[];
-  const kill_switches: Record<string, boolean> = {};
+  // Only active kill switches whose targeting rule matches the current device/user are returned.
+  const ksRows = db.prepare('SELECT key, active, targeting FROM kill_switches WHERE active = 1').all() as KillSwitchRow[];
+  const kill_switches: string[] = [];
   for (const ks of ksRows) {
-    kill_switches[ks.key] = ks.active === 1;
+    const rule = parseTargeting(ks.targeting);
+    const deviceCtx: DeviceContext = { platform, nativeVersion: native_version, installId: install_id, entityKey: ks.key };
+    if (!rule || evaluateTargeting(rule, deviceCtx, userCtx, db)) {
+      kill_switches.push(ks.key);
+    }
   }
 
   // ── Version fingerprint ───────────────────────────────────────────────────

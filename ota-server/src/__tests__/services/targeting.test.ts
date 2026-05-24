@@ -1,4 +1,4 @@
-import { evaluateTargeting, parseTargeting } from '../../services/targeting.js';
+import { evaluateTargeting, evaluateAttributeRule, parseTargeting } from '../../services/targeting.js';
 import type { DeviceContext, TargetingRule } from '../../services/targeting.js';
 
 const baseCtx: DeviceContext = {
@@ -120,7 +120,7 @@ describe('evaluateTargeting', () => {
     it('fails if one criterion fails', () => {
       const rule: TargetingRule = {
         platforms: ['ios'],
-        min_version: '2.0.0',  // version too high
+        min_version: '2.0.0', // version too high
       };
       expect(evaluateTargeting(rule, baseCtx)).toBe(false);
     });
@@ -139,5 +139,177 @@ describe('parseTargeting', () => {
 
   it('returns null for invalid JSON', () => {
     expect(parseTargeting('not-json')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// New tests: user identity targeting
+// ---------------------------------------------------------------------------
+
+const baseDevice: DeviceContext = {
+  platform: 'ios',
+  nativeVersion: '1.0.0',
+  installId: 'dev1',
+  entityKey: 'flag1',
+};
+
+describe('user_ids targeting', () => {
+  it('matches when userId is in user_ids list', () => {
+    expect(evaluateTargeting({ user_ids: ['user_abc'] }, baseDevice, { userId: 'user_abc' })).toBe(true);
+  });
+
+  it('rejects when userId not in list', () => {
+    expect(evaluateTargeting({ user_ids: ['user_abc'] }, baseDevice, { userId: 'user_xyz' })).toBe(false);
+  });
+
+  it('rejects when no userCtx provided', () => {
+    expect(evaluateTargeting({ user_ids: ['user_abc'] }, baseDevice)).toBe(false);
+  });
+
+  it('rejects when userCtx has no userId', () => {
+    expect(evaluateTargeting({ user_ids: ['user_abc'] }, baseDevice, {})).toBe(false);
+  });
+
+  it('matches one of multiple user_ids', () => {
+    expect(
+      evaluateTargeting({ user_ids: ['user_a', 'user_b', 'user_c'] }, baseDevice, { userId: 'user_b' }),
+    ).toBe(true);
+  });
+});
+
+describe('evaluateAttributeRule', () => {
+  it('eq: matches plan === premium', () => {
+    expect(
+      evaluateAttributeRule({ attribute: 'plan', operator: 'eq', value: 'premium' }, { plan: 'premium' }),
+    ).toBe(true);
+  });
+
+  it('eq: rejects plan !== premium', () => {
+    expect(
+      evaluateAttributeRule({ attribute: 'plan', operator: 'eq', value: 'premium' }, { plan: 'free' }),
+    ).toBe(false);
+  });
+
+  it('neq: matches plan !== premium', () => {
+    expect(
+      evaluateAttributeRule({ attribute: 'plan', operator: 'neq', value: 'premium' }, { plan: 'free' }),
+    ).toBe(true);
+  });
+
+  it('neq: rejects when plan equals value', () => {
+    expect(
+      evaluateAttributeRule({ attribute: 'plan', operator: 'neq', value: 'premium' }, { plan: 'premium' }),
+    ).toBe(false);
+  });
+
+  it('gt: account_age_days > 30 passes when age is 45', () => {
+    expect(
+      evaluateAttributeRule({ attribute: 'account_age_days', operator: 'gt', value: 30 }, { account_age_days: 45 }),
+    ).toBe(true);
+  });
+
+  it('gt: account_age_days > 30 fails when age is 5', () => {
+    expect(
+      evaluateAttributeRule({ attribute: 'account_age_days', operator: 'gt', value: 30 }, { account_age_days: 5 }),
+    ).toBe(false);
+  });
+
+  it('lt: account_age_days < 7 passes when age is 3', () => {
+    expect(
+      evaluateAttributeRule({ attribute: 'account_age_days', operator: 'lt', value: 7 }, { account_age_days: 3 }),
+    ).toBe(true);
+  });
+
+  it('lt: account_age_days < 7 fails when age is 10', () => {
+    expect(
+      evaluateAttributeRule({ attribute: 'account_age_days', operator: 'lt', value: 7 }, { account_age_days: 10 }),
+    ).toBe(false);
+  });
+
+  it('contains: email_domain contains rumik', () => {
+    expect(
+      evaluateAttributeRule(
+        { attribute: 'email_domain', operator: 'contains', value: 'rumik' },
+        { email_domain: 'rumik.dev' },
+      ),
+    ).toBe(true);
+  });
+
+  it('contains: rejects when string not contained', () => {
+    expect(
+      evaluateAttributeRule(
+        { attribute: 'email_domain', operator: 'contains', value: 'rumik' },
+        { email_domain: 'gmail.com' },
+      ),
+    ).toBe(false);
+  });
+
+  it('in: plan in [free, trial] passes for trial', () => {
+    expect(
+      evaluateAttributeRule(
+        { attribute: 'plan', operator: 'in', value: ['free', 'trial'] },
+        { plan: 'trial' },
+      ),
+    ).toBe(true);
+  });
+
+  it('in: plan in [free, trial] fails for premium', () => {
+    expect(
+      evaluateAttributeRule(
+        { attribute: 'plan', operator: 'in', value: ['free', 'trial'] },
+        { plan: 'premium' },
+      ),
+    ).toBe(false);
+  });
+
+  it('returns false when attribute is undefined on user', () => {
+    expect(
+      evaluateAttributeRule({ attribute: 'plan', operator: 'eq', value: 'premium' }, {}),
+    ).toBe(false);
+  });
+});
+
+describe('user_attribute_rules in evaluateTargeting', () => {
+  it('passes when all rules match', () => {
+    const rule: TargetingRule = {
+      user_attribute_rules: [{ attribute: 'plan', operator: 'eq', value: 'premium' }],
+    };
+    expect(evaluateTargeting(rule, baseDevice, { plan: 'premium' })).toBe(true);
+  });
+
+  it('fails when any rule fails', () => {
+    const rule: TargetingRule = {
+      user_attribute_rules: [{ attribute: 'plan', operator: 'eq', value: 'premium' }],
+    };
+    expect(evaluateTargeting(rule, baseDevice, { plan: 'free' })).toBe(false);
+  });
+
+  it('fails when no userCtx provided', () => {
+    const rule: TargetingRule = {
+      user_attribute_rules: [{ attribute: 'plan', operator: 'eq', value: 'premium' }],
+    };
+    expect(evaluateTargeting(rule, baseDevice)).toBe(false);
+  });
+
+  it('AND semantics: all rules must pass', () => {
+    const rule: TargetingRule = {
+      user_attribute_rules: [
+        { attribute: 'plan', operator: 'eq', value: 'premium' },
+        { attribute: 'account_age_days', operator: 'gt', value: 30 },
+      ],
+    };
+    expect(evaluateTargeting(rule, baseDevice, { plan: 'premium', account_age_days: 60 })).toBe(true);
+    expect(evaluateTargeting(rule, baseDevice, { plan: 'premium', account_age_days: 10 })).toBe(false);
+  });
+
+  it('combines platform + user_attribute_rules with AND semantics', () => {
+    const rule: TargetingRule = {
+      platforms: ['ios'],
+      user_attribute_rules: [{ attribute: 'plan', operator: 'eq', value: 'premium' }],
+    };
+    expect(evaluateTargeting(rule, baseDevice, { plan: 'premium' })).toBe(true);
+    expect(
+      evaluateTargeting(rule, { ...baseDevice, platform: 'android' }, { plan: 'premium' }),
+    ).toBe(false);
   });
 });

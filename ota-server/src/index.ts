@@ -21,6 +21,8 @@ import perfMetricsRouter from './routes/perfMetrics.js';
 import updateEventsRouter from './routes/updateEvents.js';
 import alertsRouter from './routes/alerts.js';
 import errorsRouter from './routes/errors.js';
+import segmentsRouter from './routes/segments.js';
+import schedulesRouter from './routes/schedules.js';
 import { attachWsServer, setupRedisPubSub } from './ws.js';
 import { startRolloutScheduler, getSchedulerStatus } from './rolloutScheduler.js';
 import { getRedis } from './redis.js';
@@ -29,6 +31,8 @@ import { runAlertEngine } from './services/alertEngine.js';
 import { runCleanup } from './services/cleanup.js';
 import { runMigrations } from './migrate.js';
 import prometheusMetricsRouter from './routes/prometheusMetrics.js';
+import { actorMiddleware } from './middleware/actor.js';
+import db from './db.js';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 4000);
@@ -60,6 +64,9 @@ function buildRateLimiter() {
 
 const apiLimiter = buildRateLimiter();
 
+// Actor middleware — applied globally so all routes know who made the request
+app.use(actorMiddleware);
+
 // Health check — no auth
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -84,6 +91,8 @@ app.use('/api/perf-metrics', perfMetricsRouter);
 app.use('/api/update-events', updateEventsRouter);
 app.use('/api/alerts', alertsRouter);
 app.use('/api/errors', errorsRouter);
+app.use('/api/segments', segmentsRouter);
+app.use('/api/schedules', schedulesRouter);
 
 // Rollout scheduler status
 app.get('/api/scheduler', (_req, res) => {
@@ -114,11 +123,85 @@ const broadcastFn = attachWsServer(httpServer);
 setBroadcast(broadcastFn);
 setupRedisPubSub(broadcastFn);
 
+function seedDemoData(): void {
+  try {
+    // Segments
+    db.exec(`
+      INSERT OR IGNORE INTO segments (id, key, name, description, rules, created_at, updated_at) VALUES
+        ('seg-001', 'premium_users', 'Premium Users', 'Users with active premium plan',
+         '[{"attribute":"plan","operator":"eq","value":"premium"}]',
+         datetime('now'), datetime('now')),
+        ('seg-002', 'beta_testers', 'Beta Testers', 'Internal beta testing group',
+         '[{"attribute":"email_domain","operator":"eq","value":"rumik.internal"}]',
+         datetime('now'), datetime('now')),
+        ('seg-003', 'new_users', 'New Users', 'Users who joined less than 30 days ago',
+         '[{"attribute":"account_age_days","operator":"lt","value":30}]',
+         datetime('now'), datetime('now')),
+        ('seg-004', 'power_users', 'Power Users', 'Long-term premium users',
+         '[{"attribute":"plan","operator":"eq","value":"premium"},{"attribute":"account_age_days","operator":"gt","value":365}]',
+         datetime('now'), datetime('now'))
+    `);
+
+    // Feature flags (table is feature_flags; columns: id, key, enabled, description, targeting, created_at, updated_at)
+    db.exec(`
+      INSERT OR IGNORE INTO feature_flags (id, key, enabled, description, targeting, created_at, updated_at) VALUES
+        ('flag-001', 'show_premium_upsell', 1, 'Shows upsell card to free users',
+         '{"platforms":["ios","android"],"user_attribute_rules":[{"attribute":"plan","operator":"neq","value":"premium"}]}',
+         datetime('now'), datetime('now')),
+        ('flag-002', 'enable_social_share', 0, 'Share tracks to social media',
+         NULL, datetime('now'), datetime('now')),
+        ('flag-003', 'enable_offline_mode', 0, 'Download tracks for offline playback',
+         '{"segment_keys":["premium_users"]}', datetime('now'), datetime('now')),
+        ('flag-004', 'enable_lyrics_link', 1, 'Link to lyrics from now playing',
+         NULL, datetime('now'), datetime('now'))
+    `);
+
+    // Experiments
+    db.exec(`
+      INSERT OR IGNORE INTO experiments (id, key, status, variants, targeting, created_at, updated_at) VALUES
+        ('exp-001', 'home_layout', 'active',
+         '[{"id":"control","weight":33},{"id":"grid","weight":33},{"id":"horizontal","weight":34}]',
+         NULL, datetime('now'), datetime('now')),
+        ('exp-002', 'player_ui', 'active',
+         '[{"id":"control","weight":50},{"id":"immersive","weight":50}]',
+         '{"segment_keys":["beta_testers"]}',
+         datetime('now'), datetime('now')),
+        ('exp-003', 'search_prompt_copy', 'active',
+         '[{"id":"control","weight":50},{"id":"variant_a","weight":50}]',
+         NULL, datetime('now'), datetime('now'))
+    `);
+
+    // Kill switches (targeting column added via migration in db.ts)
+    db.exec(`
+      INSERT OR IGNORE INTO kill_switches (id, key, active, reason, targeting, created_at, updated_at) VALUES
+        ('ks-001', 'disable_web_payments', 1, 'Web payment processor outage', NULL, datetime('now'), datetime('now')),
+        ('ks-002', 'disable_podcast_tab', 0, 'Podcast feature temporarily disabled', NULL, datetime('now'), datetime('now')),
+        ('ks-003', 'disable_recommendations', 0, 'Recommendation engine maintenance', '{"platforms":["web"]}', datetime('now'), datetime('now'))
+    `);
+
+    // Demo schedules
+    db.exec(`
+      INSERT OR IGNORE INTO flag_schedules (id, entity_type, entity_id, action, payload, scheduled_at, executed_at, created_by, created_at) VALUES
+        ('sched-001', 'flag', 'flag-002', 'activate', NULL,
+         datetime('now', '+7 days'), NULL, 'seed', datetime('now')),
+        ('sched-002', 'flag', 'flag-003', 'activate', NULL,
+         datetime('now', '+14 days'), NULL, 'seed', datetime('now')),
+        ('sched-003', 'experiment', 'exp-001', 'complete', NULL,
+         datetime('now', '+30 days'), NULL, 'seed', datetime('now'))
+    `);
+
+    logger.info('Demo data seeded successfully');
+  } catch (e) {
+    logger.warn({ err: e }, 'Demo data seeding error (may already exist)');
+  }
+}
+
 httpServer.listen(PORT, () => {
   const authMode = process.env.OTA_API_KEY ? 'bearer auth enabled' : 'auth disabled (dev)';
   logger.info({ port: PORT, authMode }, 'OTA server listening');
   logger.info({ url: `ws://localhost:${PORT}/ws` }, 'WebSocket server ready');
   runMigrations().catch(e => logger.error({ err: e }, 'Migration failed'));
+  seedDemoData();
   startRolloutScheduler();
   // Alert engine: evaluate rules every 5 minutes
   setInterval(() => { runAlertEngine().catch(e => logger.error({ err: e }, 'alertEngine error')); }, 5 * 60_000);

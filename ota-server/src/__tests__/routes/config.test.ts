@@ -36,7 +36,7 @@ describe('Config endpoint', () => {
     expect(res.body.data.flags).toEqual({});
     expect(res.body.data.experiments).toEqual({});
     expect(res.body.data.urls).toEqual({});
-    expect(res.body.data.kill_switches).toEqual({});
+    expect(res.body.data.kill_switches).toEqual([]);
     expect(res.body.data.ttl).toBeGreaterThan(0);
     expect(res.body.data.version).toBeDefined();
   });
@@ -74,15 +74,15 @@ describe('Config endpoint', () => {
       const now = new Date().toISOString();
       testDb.prepare('INSERT INTO kill_switches (id, key, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run('ks1', 'payments', 1, now, now);
       return request(app).get('/api/config' + BASE_QUERY).then(res => {
-        expect(res.body.data.kill_switches.payments).toBe(true);
+        expect(res.body.data.kill_switches).toContain('payments');
       });
     });
 
-    it('returns inactive kill switch as false', () => {
+    it('does not return inactive kill switch', () => {
       const now = new Date().toISOString();
       testDb.prepare('INSERT INTO kill_switches (id, key, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run('ks2', 'search', 0, now, now);
       return request(app).get('/api/config' + BASE_QUERY).then(res => {
-        expect(res.body.data.kill_switches.search).toBe(false);
+        expect(res.body.data.kill_switches).not.toContain('search');
       });
     });
   });
@@ -125,6 +125,46 @@ describe('Config endpoint', () => {
       return request(app).get('/api/config' + BASE_QUERY).then(res => {
         expect(res.body.data.urls.api_base).toBe('https://api.rumik.app');
       });
+    });
+  });
+
+  describe('user context targeting', () => {
+    it('user plan parameter filters flags with user_attribute_rules targeting', async () => {
+      const now = new Date().toISOString();
+      const targeting = JSON.stringify({
+        user_attribute_rules: [{ attribute: 'plan', operator: 'eq', value: 'premium' }],
+      });
+      testDb.prepare('INSERT INTO feature_flags (id, key, enabled, targeting, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run('f-plan', 'premium_feature', 1, targeting, now, now);
+
+      // free user — flag should be off
+      const resFree = await request(app).get('/api/config' + BASE_QUERY + '&plan=free');
+      expect(resFree.status).toBe(200);
+      expect(resFree.body.data.flags.premium_feature).toBe(false);
+
+      // premium user — flag should be on
+      const resPremium = await request(app).get('/api/config' + BASE_QUERY + '&plan=premium');
+      expect(resPremium.status).toBe(200);
+      expect(resPremium.body.data.flags.premium_feature).toBe(true);
+
+      testDb.exec("DELETE FROM feature_flags WHERE id = 'f-plan'");
+    });
+
+    it('kill switches with platform targeting only activate on matching platform', async () => {
+      const now = new Date().toISOString();
+      const targeting = JSON.stringify({ platforms: ['ios'] });
+      testDb.prepare('INSERT INTO kill_switches (id, key, active, targeting, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run('ks-ios', 'ios_payment_bug', 1, targeting, now, now);
+
+      // ios request — kill switch should activate
+      const resIos = await request(app).get('/api/config?platform=ios&native_version=1.5.0&install_id=device-ios');
+      expect(resIos.status).toBe(200);
+      expect(resIos.body.data.kill_switches).toContain('ios_payment_bug');
+
+      // android request — kill switch should NOT activate
+      const resAndroid = await request(app).get('/api/config?platform=android&native_version=1.5.0&install_id=device-android');
+      expect(resAndroid.status).toBe(200);
+      expect(resAndroid.body.data.kill_switches).not.toContain('ios_payment_bug');
+
+      testDb.exec("DELETE FROM kill_switches WHERE id = 'ks-ios'");
     });
   });
 
