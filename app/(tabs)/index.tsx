@@ -28,6 +28,7 @@ import { Colors, Typography, Spacing } from "../../src/theme/tokens";
 import { useMiniPlayerPadding } from "../../src/hooks/useMiniPlayerPadding";
 import { useFeatureFlag, useExperiment } from "../../src/hooks/useRemoteConfig";
 import { Pill } from "../../src/components/ui/Pill";
+import { PremiumUpsellCard } from "../../src/components/PremiumUpsellCard";
 
 const GENRE_QUERIES: Record<string, string> = {
   All: "",
@@ -46,6 +47,7 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const miniPlayerPadding = useMiniPlayerPadding();
   const showGenrePills = useFeatureFlag("show_genre_pills");
+  const showPremiumUpsell = useFeatureFlag("show_premium_upsell");
   const greetingStyle = useExperiment("tagline_test", "control");
   const chartLimit = parseInt(useExperiment("chart_limit", "8"), 10);
   const [activeGenre, setActiveGenre] = useState<string>("All");
@@ -172,6 +174,8 @@ export default function HomeScreen() {
             />
           </>
         )}
+
+        {showPremiumUpsell && <PremiumUpsellCard />}
 
         {chartList.length > 0 && (
           <>
