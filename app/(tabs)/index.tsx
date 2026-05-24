@@ -46,7 +46,7 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const miniPlayerPadding = useMiniPlayerPadding();
   const showGenrePills = useFeatureFlag("show_genre_pills");
-  const greetingStyle = useExperiment("home_greeting_style", "control");
+  const greetingStyle = useExperiment("tagline_test", "control");
   const chartLimit = parseInt(useExperiment("chart_limit", "8"), 10);
   const [activeGenre, setActiveGenre] = useState<string>("All");
 

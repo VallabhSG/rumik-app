@@ -148,11 +148,13 @@ function seedDemoData(): void {
         ('flag-001', 'show_premium_upsell', 1, 'Shows upsell card to free users',
          '{"platforms":["ios","android"],"user_attribute_rules":[{"attribute":"plan","operator":"neq","value":"premium"}]}',
          datetime('now'), datetime('now')),
-        ('flag-002', 'enable_social_share', 0, 'Share tracks to social media',
+        ('flag-002', 'enable_social_share', 1, 'Share tracks to social media',
          NULL, datetime('now'), datetime('now')),
         ('flag-003', 'enable_offline_mode', 0, 'Download tracks for offline playback',
          '{"segment_keys":["premium_users"]}', datetime('now'), datetime('now')),
         ('flag-004', 'enable_lyrics_link', 1, 'Link to lyrics from now playing',
+         NULL, datetime('now'), datetime('now')),
+        ('flag-005', 'show_genre_pills', 1, 'Genre filter pills on home screen',
          NULL, datetime('now'), datetime('now'))
     `);
 
@@ -168,6 +170,12 @@ function seedDemoData(): void {
          datetime('now'), datetime('now')),
         ('exp-003', 'search_prompt_copy', 'active',
          '[{"id":"control","weight":50},{"id":"variant_a","weight":50}]',
+         NULL, datetime('now'), datetime('now')),
+        ('exp-004', 'tagline_test', 'active',
+         '[{"id":"control","weight":50},{"id":"bold","weight":50}]',
+         NULL, datetime('now'), datetime('now')),
+        ('exp-005', 'chart_limit', 'active',
+         '[{"id":"8","weight":34},{"id":"10","weight":33},{"id":"15","weight":33}]',
          NULL, datetime('now'), datetime('now'))
     `);
 
@@ -176,7 +184,8 @@ function seedDemoData(): void {
       INSERT OR IGNORE INTO kill_switches (id, key, active, reason, targeting, created_at, updated_at) VALUES
         ('ks-001', 'disable_web_payments', 1, 'Web payment processor outage', NULL, datetime('now'), datetime('now')),
         ('ks-002', 'disable_podcast_tab', 0, 'Podcast feature temporarily disabled', NULL, datetime('now'), datetime('now')),
-        ('ks-003', 'disable_recommendations', 0, 'Recommendation engine maintenance', '{"platforms":["web"]}', datetime('now'), datetime('now'))
+        ('ks-003', 'disable_recommendations', 0, 'Recommendation engine maintenance', '{"platforms":["web"]}', datetime('now'), datetime('now')),
+        ('ks-004', 'disable_search', 0, 'Emergency search kill switch', NULL, datetime('now'), datetime('now'))
     `);
 
     // Demo schedules
