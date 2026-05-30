@@ -1,5 +1,6 @@
 module.exports = {
   preset: 'jest-expo',
+  forceExit: true,
   setupFiles: ['./jest.setup.js'],
   moduleNameMapper: {
     '^expo/src/winter/(.*)$': '<rootDir>/__mocks__/expo-winter.js',
