@@ -23,7 +23,9 @@ export function CopyRow({ label, value }: CopyRowProps) {
       <Text style={styles.label}>{label}</Text>
       <Text style={[styles.value, styles.valueMono]} numberOfLines={1}>
         {value ? value.slice(0, 16) + "…" : "—"}{" "}
-        <Text style={{ color: copied ? "#3ecf8e" : Colors.textMuted, fontSize: 10 }}>
+        <Text
+          style={{ color: copied ? "#3ecf8e" : Colors.textMuted, fontSize: 10 }}
+        >
           {copied ? "✓ copied" : "tap to copy"}
         </Text>
       </Text>

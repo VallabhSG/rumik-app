@@ -36,7 +36,12 @@ jest.mock("../../hooks/useMiniPlayerPadding", () => ({
 
 jest.mock("react-native-safe-area-context", () => {
   const { View } = require("react-native");
-  return { SafeAreaView: ({ children, ...props }: React.ComponentProps<typeof View>) => <View {...props}>{children}</View> };
+  return {
+    SafeAreaView: ({
+      children,
+      ...props
+    }: React.ComponentProps<typeof View>) => <View {...props}>{children}</View>,
+  };
 });
 
 jest.mock("../../components/ui/SectionLabel", () => ({

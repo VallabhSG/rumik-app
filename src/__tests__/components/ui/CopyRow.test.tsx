@@ -7,7 +7,8 @@ jest.mock("expo-clipboard", () => ({
   setStringAsync: jest.fn().mockResolvedValue(undefined),
 }));
 
-const mockSetStringAsync = jest.requireMock("expo-clipboard").setStringAsync as jest.Mock;
+const mockSetStringAsync = jest.requireMock("expo-clipboard")
+  .setStringAsync as jest.Mock;
 
 describe("CopyRow", () => {
   beforeEach(() => {
