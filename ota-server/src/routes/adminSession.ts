@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
+import { z } from 'zod';
 
 const router = Router();
 
@@ -17,9 +18,12 @@ export function requireAdminSession(req: Request, res: Response, next: NextFunct
   next();
 }
 
+const loginSchema = z.object({ password: z.string().min(1) });
+
 // POST /admin/session/login
 router.post('/login', (req: Request, res: Response) => {
-  const { password } = req.body as { password?: string };
+  const parsed = loginSchema.safeParse(req.body);
+  const password = parsed.success ? parsed.data.password : undefined;
   const apiKey = process.env.OTA_API_KEY;
 
   if (!apiKey) {

@@ -67,6 +67,7 @@ CLAUDE.md
 # Internal planning docs
 PLAN_PART_D.md
 claude.md.txt
+docs/superpowers/
 
 # Local env files (keep .env.example out too — use docs/runbook.md for setup)
 .env

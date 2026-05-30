@@ -56,9 +56,7 @@ export class OtaClient {
    * If crash rate exceeds the threshold, triggers an auto-rollback.
    */
   async initialize(): Promise<void> {
-    console.log("[OTA] initialize start");
     const version = await this.resolveCurrentVersion();
-    console.log("[OTA] resolved version:", version);
 
     this.crashTracker = new CrashTracker(
       version,
@@ -69,9 +67,7 @@ export class OtaClient {
 
     try {
       await this.crashTracker.initialize();
-      console.log("[OTA] crashTracker initialized");
       await this.crashTracker.recordLaunch();
-      console.log("[OTA] launch recorded");
     } catch (e) {
       console.warn("[OTA] crashTracker init failed (non-fatal):", e);
     }
@@ -89,8 +85,6 @@ export class OtaClient {
     } catch (e) {
       console.warn("[OTA] monitoring init failed (non-fatal):", e);
     }
-
-    console.log("[OTA] initialize done");
   }
 
   destroy(): void {
@@ -137,10 +131,6 @@ export class OtaClient {
           release.max_native_version,
         )
       ) {
-        console.log(
-          `[OTA] skipping release ${release.version} — native version ${nativeVersion} ` +
-            `outside range [${release.min_native_version ?? "*"}, ${release.max_native_version ?? "*"}]`,
-        );
         this.onStatus("up-to-date");
         return "up-to-date";
       }
