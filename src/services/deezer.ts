@@ -9,33 +9,45 @@ export interface DeezerTrack {
   duration: number;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapTrack(item: any): DeezerTrack | null {
+interface RawItunesTrack {
+  kind?: string;
+  trackId?: number;
+  trackName?: string;
+  artistId?: number;
+  artistName?: string;
+  collectionId?: number;
+  collectionName?: string;
+  artworkUrl100?: string;
+  previewUrl?: string;
+  trackTimeMillis?: number;
+}
+
+function mapTrack(item: RawItunesTrack): DeezerTrack | null {
   if (!item.previewUrl || item.kind !== "song") return null;
-  const art = (item.artworkUrl100 as string | undefined) ?? "";
+  const art = item.artworkUrl100 ?? "";
   return {
-    id: item.trackId as number,
-    title: item.trackName as string,
+    id: item.trackId ?? 0,
+    title: item.trackName ?? "",
     artist: {
-      id: (item.artistId as number) ?? 0,
-      name: item.artistName as string,
+      id: item.artistId ?? 0,
+      name: item.artistName ?? "",
       picture_medium: art,
     },
     album: {
-      id: (item.collectionId as number) ?? 0,
-      title: (item.collectionName as string) ?? "",
+      id: item.collectionId ?? 0,
+      title: item.collectionName ?? "",
       cover_medium: art.replace("100x100bb", "400x400bb"),
     },
-    preview: item.previewUrl as string,
-    duration: Math.floor(((item.trackTimeMillis as number) ?? 30000) / 1000),
+    preview: item.previewUrl,
+    duration: Math.floor((item.trackTimeMillis ?? 30000) / 1000),
   };
 }
 
-async function fetchItunes(path: string): Promise<unknown[] | null> {
+async function fetchItunes(path: string): Promise<RawItunesTrack[] | null> {
   try {
     const res = await fetch(`${ITUNES}${path}`);
     if (!res.ok) return null;
-    const json = (await res.json()) as { results?: unknown[] };
+    const json = (await res.json()) as { results?: RawItunesTrack[] };
     return json.results ?? null;
   } catch {
     return null;

@@ -92,7 +92,6 @@ export function useOtaUpdate(): OtaUpdateState {
     client
       .initialize()
       .then(() => client.checkForUpdate())
-      .then((result) => console.log("[OTA] checkForUpdate result:", result))
       .catch((err: unknown) => {
         const msg =
           err instanceof Error ? err.message : "OTA initialization failed";

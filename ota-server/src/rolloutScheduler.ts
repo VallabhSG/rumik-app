@@ -104,7 +104,7 @@ function processSchedules(): void {
       }
 
       db.prepare("UPDATE flag_schedules SET executed_at = datetime('now') WHERE id = ?").run(id);
-      console.log('[scheduler] executed schedule', id, entity_type, action);
+      logger.info({ scheduleId: id, entity_type, action }, 'scheduler: executed schedule');
     } catch (err) {
       logger.error({ err, scheduleId: id, entity_type, action }, 'scheduler: failed to execute schedule');
     }

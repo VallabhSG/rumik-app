@@ -116,6 +116,13 @@ app.use((_req, res) => {
   res.status(404).json({ success: false, error: 'Not found' });
 });
 
+// 5xx — must have 4 params so Express treats it as an error handler
+app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  logger.error({ err }, 'unhandled error');
+  const message = err instanceof Error ? err.message : 'Internal server error';
+  res.status(500).json({ success: false, error: message });
+});
+
 const httpServer = http.createServer(app);
 
 // WebSocket server — attach to same HTTP server on path /ws
