@@ -18,6 +18,7 @@ import { useDynamicUrl } from "../../src/hooks/useRemoteConfig";
 import { useRemoteConfig } from "../../src/contexts/RemoteConfigContext";
 import { Colors, Typography, Spacing, Radius } from "../../src/theme/tokens";
 import { getInstallId } from "../../src/services/ota/deviceId";
+import { CopyRow } from "../../src/components/ui/CopyRow";
 
 const PLAN_COLORS: Record<string, string> = {
   pro: "#a78bfa",
@@ -121,11 +122,7 @@ export default function ProfileScreen() {
             label="Email verified"
             value={emailVerified ? "Yes" : "No"}
           />
-          <InfoRow
-            label="User ID"
-            value={user?.id ? user.id.slice(0, 18) + "…" : "—"}
-            mono
-          />
+          <CopyRow label="User ID" value={user?.id ?? ""} />
         </View>
 
         {/* ── App ── */}
@@ -137,11 +134,7 @@ export default function ProfileScreen() {
             value={otaStatus === "idle" ? "dev" : "production"}
           />
           <InfoRow label="Update Status" value={otaStatus} />
-          <InfoRow
-            label="Install ID"
-            value={installId.slice(0, 18) + "…"}
-            mono
-          />
+          <CopyRow label="Install ID" value={installId} />
         </View>
 
         {/* ── Live Remote Config ── */}
