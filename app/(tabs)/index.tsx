@@ -137,6 +137,14 @@ export default function HomeScreen() {
             >
               rumik
             </Text>
+            {(greetingStyle === "tagline_feel" ||
+              greetingStyle === "tagline_sound") && (
+              <Text style={styles.tagline}>
+                {greetingStyle === "tagline_feel"
+                  ? "feel the music"
+                  : "your sound, your way"}
+              </Text>
+            )}
           </View>
         </View>
 
@@ -314,6 +322,12 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   wordmarkBold: { fontSize: 38, letterSpacing: -2 },
+  tagline: {
+    ...Typography.caption,
+    color: Colors.textSecondary,
+    marginTop: 2,
+    letterSpacing: 0.5,
+  },
   genrePills: {
     flexDirection: "row",
     flexWrap: "wrap",

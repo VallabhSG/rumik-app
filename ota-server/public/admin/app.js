@@ -111,7 +111,9 @@ function emptyState(label) {
     </div>`;
 }
 
-function targetingFields(existing = {}) {
+function targetingFields(existing = {}, segments = []) {
+  const selectedSegments = existing.segment_keys ?? [];
+  const userIdsVal = (existing.user_ids ?? []).join(', ');
   return `
     <div class="field">
       <label>Platforms (comma-separated, leave blank for all)</label>
@@ -132,6 +134,23 @@ function targetingFields(existing = {}) {
       <label>Rollout Percentage (0–100, blank = 100)</label>
       <input id="f-pct" type="number" min="0" max="100"
         placeholder="100" value="${esc(existing.percentage ?? '')}">
+    </div>
+    ${segments.length ? `
+    <div class="field">
+      <label>Segments (user must match at least one)</label>
+      <div style="display:flex;flex-direction:column;gap:6px;padding:8px 10px;background:var(--surface2,#111);border-radius:6px;border:1px solid var(--border)">
+        ${segments.map(s => `
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:normal">
+            <input type="checkbox" name="f-segment" value="${esc(s.key)}" ${selectedSegments.includes(s.key) ? 'checked' : ''}>
+            <span>${esc(s.name)}</span>
+            <span style="color:var(--text-muted);font-size:11px">(${esc(s.key)})</span>
+          </label>`).join('')}
+      </div>
+    </div>` : ''}
+    <div class="field">
+      <label>Specific User IDs (comma-separated, leave blank for all)</label>
+      <input id="f-userids" placeholder="user_abc123, user_xyz456"
+        value="${esc(userIdsVal)}">
     </div>`;
 }
 
@@ -142,12 +161,38 @@ function readTargeting() {
   const max_version = document.getElementById('f-maxver')?.value.trim() || undefined;
   const pct = document.getElementById('f-pct')?.value.trim();
   const percentage = pct ? Number(pct) : undefined;
+  const segChecks = document.querySelectorAll('input[name="f-segment"]:checked');
+  const segment_keys = Array.from(segChecks).map(cb => cb.value).filter(Boolean);
+  const userIdsRaw = document.getElementById('f-userids')?.value.trim();
+  const user_ids = userIdsRaw ? userIdsRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
   const rule = {};
   if (platforms?.length) rule.platforms = platforms;
   if (min_version)  rule.min_version  = min_version;
   if (max_version)  rule.max_version  = max_version;
   if (percentage !== undefined) rule.percentage = percentage;
+  if (segment_keys.length) rule.segment_keys = segment_keys;
+  if (user_ids.length) rule.user_ids = user_ids;
   return Object.keys(rule).length ? rule : undefined;
+}
+
+let _segmentsCache = null;
+async function fetchSegmentsList() {
+  if (_segmentsCache) return _segmentsCache;
+  try { const { data } = await get('/segments'); _segmentsCache = data; return data; }
+  catch { return []; }
+}
+
+function fmtTargeting(targeting) {
+  if (!targeting) return '<span style="color:var(--text-muted);font-size:11px">All users</span>';
+  const t = typeof targeting === 'string' ? JSON.parse(targeting) : targeting;
+  const parts = [];
+  if (t.segment_keys?.length) parts.push(...t.segment_keys);
+  if (t.user_ids?.length) parts.push(`${t.user_ids.length} user${t.user_ids.length !== 1 ? 's' : ''}`);
+  if (t.percentage !== undefined && t.percentage < 100) parts.push(`${t.percentage}%`);
+  if (t.platforms?.length) parts.push(t.platforms.join('/'));
+  return parts.length
+    ? `<span style="color:#f59e0b;font-size:11px">&#11044; ${esc(parts.join(' · '))}</span>`
+    : '<span style="color:var(--text-muted);font-size:11px">All users</span>';
 }
 
 // ── Feature Flags ────────────────────────────────────────────────────────────
@@ -250,7 +295,7 @@ async function loadExperiments() {
         <tr>
           <td><code>${esc(e.key)}</code></td>
           <td><span class="${badgeCls}">${esc(e.status || 'draft')}</span></td>
-          <td>${variants.map(v => `${esc(v.id)} (${v.weight}%)`).join(', ')}</td>
+          <td>${variants.map(v => `${esc(v.id)} (${v.weight}%)`).join(', ')}<br>${fmtTargeting(e.targeting)}</td>
           <td>${fmtDate(e.updated_at)}</td>
           <td>
             <button class="btn btn-ghost" onclick="editExperiment('${e.id}')">Edit</button>
@@ -272,6 +317,7 @@ window.editExperiment = async function(id) {
   }
   const existingTargeting = existing.targeting ? (typeof existing.targeting === 'string' ? JSON.parse(existing.targeting) : existing.targeting) : {};
   const variantsJson = JSON.stringify(existing.variants, null, 2);
+  const segments = await fetchSegmentsList();
   const res = await openModal(id ? 'Edit Experiment' : 'New Experiment', `
     <div class="field">
       <label>Key</label>
@@ -292,7 +338,7 @@ window.editExperiment = async function(id) {
     </div>
     <hr style="border-color:var(--border);margin:16px 0">
     <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">TARGETING (optional)</p>
-    ${targetingFields(existingTargeting)}`);
+    ${targetingFields(existingTargeting, segments)}`);
 
   if (!res?.confirmed) return;
   const key = document.getElementById('e-key').value.trim();
