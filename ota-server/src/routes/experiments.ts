@@ -200,17 +200,27 @@ router.get('/:key/results', (req, res) => {
       'SELECT COUNT(DISTINCT install_id) as cnt FROM experiment_conversions WHERE experiment_id = ? AND variant_id = ?'
     ).get(exp.id, v.id) as { cnt: number }).cnt;
     const rate = exposures > 0 ? conversions / exposures : 0;
-    return { id: v.id, exposures, conversions, rate, lift_vs_control: 0 };
+    return { id: v.id, exposures, conversions, rate, lift_vs_control: null as number | null };
   });
 
   const control = variantStats.find(v => v.id === 'control');
-  if (control) {
+  if (control && control.rate > 0) {
     for (const v of variantStats) {
-      v.lift_vs_control = control.rate > 0 ? (v.rate - control.rate) / control.rate : 0;
+      v.lift_vs_control = (v.rate - control.rate) / control.rate;
     }
   }
 
-  const winner = variantStats.find(v => v.id !== 'control' && v.lift_vs_control >= 0.1)?.id ?? null;
+  let winner: string | null = null;
+  if (control) {
+    winner = variantStats.find(v => v.id !== 'control' && (v.lift_vs_control ?? 0) >= 0.1)?.id ?? null;
+  } else {
+    // No control variant — pick the highest-converting variant with a minimum sample size
+    const sampled = variantStats.filter(v => v.exposures >= 100);
+    if (sampled.length > 0) {
+      const best = sampled.reduce((a, b) => (a.rate >= b.rate ? a : b));
+      winner = best.rate > 0 ? best.id : null;
+    }
+  }
   return void res.json({ variants: variantStats, winner });
 });
 

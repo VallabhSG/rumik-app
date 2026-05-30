@@ -87,7 +87,8 @@ function loadPanel(tab) {
   if (tab === 'audit')       loadAudit(0);
   if (tab === 'segments')    loadSegments();
   if (tab === 'results')     loadResults();
-  if (tab === 'schedules')   loadSchedules();
+  if (tab === 'schedules')    loadSchedules();
+  if (tab === 'build-health') loadBuildHealth();
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -1555,6 +1556,74 @@ window.deleteSchedule = async function(id) {
 };
 
 document.getElementById('btn-refresh-schedules').onclick = () => loadSchedules();
+
+// ── Build Health ──────────────────────────────────────────────────────────────
+
+async function loadBuildHealth() {
+  const releasesEl = document.getElementById('bh-releases-table');
+  const killsEl = document.getElementById('bh-kills-table');
+  releasesEl.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>';
+  killsEl.innerHTML = '<tr><td colspan="2" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>';
+
+  const [relData, killData, alertData] = await Promise.allSettled([
+    get('/releases'),
+    get('/kill-switches'),
+    get('/alerts/rules'),
+  ]);
+
+  // Releases
+  const releases = relData.status === 'fulfilled' ? (relData.value.data ?? []) : [];
+  const active = releases.filter(r => r.status === 'active');
+  const paused = releases.filter(r => r.status === 'paused');
+  document.getElementById('bh-active-releases').textContent = active.length;
+  document.getElementById('bh-paused').textContent = paused.length;
+
+  if (!releases.length) {
+    releasesEl.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-muted)">No releases yet.</td></tr>';
+  } else {
+    releasesEl.innerHTML = releases.map(r => {
+      const statusCls = r.status === 'active' ? 'badge-active-release'
+        : r.status === 'paused' ? 'badge-paused-release' : 'badge-rolled_back';
+      const pct = r.rollout_percentage ?? 0;
+      return `
+        <tr>
+          <td><strong>${esc(r.version)}</strong>${r.is_rollback ? ' <span style="font-size:10px;color:var(--orange)">[rollback]</span>' : ''}</td>
+          <td>${esc(r.channel)}</td>
+          <td>${esc(r.platform)}</td>
+          <td>
+            <div class="rollout-wrap">
+              <div class="rollout-bar"><div class="rollout-fill" style="width:${pct}%"></div></div>
+              <span class="rollout-pct">${pct}%</span>
+            </div>
+          </td>
+          <td><span class="${statusCls}">${esc(r.status)}</span></td>
+          <td style="color:var(--text-muted);font-size:12px">${fmtDate(r.created_at)}</td>
+        </tr>`;
+    }).join('');
+  }
+
+  // Kill switches
+  const kills = killData.status === 'fulfilled' ? (killData.value.data ?? []) : [];
+  const activeKills = kills.filter(k => k.active);
+  document.getElementById('bh-kill-switches').textContent = activeKills.length;
+  document.getElementById('bh-kill-switches').style.color = activeKills.length > 0 ? 'var(--orange,#f97316)' : 'var(--green,#22c55e)';
+
+  if (!activeKills.length) {
+    killsEl.innerHTML = '<tr><td colspan="2" style="text-align:center;padding:24px;color:var(--text-muted)">No active kill switches.</td></tr>';
+  } else {
+    killsEl.innerHTML = activeKills.map(k => `
+      <tr>
+        <td><code>${esc(k.key)}</code></td>
+        <td>${esc(k.description ?? '—')}</td>
+      </tr>`).join('');
+  }
+
+  // Alert rules
+  const alerts = alertData.status === 'fulfilled' ? (alertData.value.data ?? []) : [];
+  document.getElementById('bh-alert-rules').textContent = alerts.length;
+}
+
+document.getElementById('btn-refresh-build-health').onclick = () => loadBuildHealth();
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 

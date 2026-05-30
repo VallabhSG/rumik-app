@@ -104,7 +104,7 @@ function computeP95(metricType: string, channel: string, version: string | null,
   const count = countRow.c;
   if (count === 0) return 0;
 
-  const offset = Math.max(0, Math.ceil(count * 0.95) - 1);
+  const offset = Math.max(0, Math.floor(count * 0.95));
   const row = db.prepare(`
     SELECT value FROM perf_metrics ${where}
     ORDER BY value ASC LIMIT 1 OFFSET ?

@@ -214,24 +214,21 @@ export class OtaClient {
       const downloadMs = Date.now() - downloadStart;
       this.perfTracker?.recordUpdateDownload(downloadMs);
 
-      // Bookkeeping for crash-safe rollback
-      const prev = await this.resolveCurrentVersion();
-      const nativeVersion =
-        Application.nativeApplicationVersion ?? this.config.nativeVersion;
-      const resolvedRelease = await this.fetchCurrentRelease(nativeVersion);
-      if (resolvedRelease) {
+      // Bookkeeping for crash-safe rollback (reuse release fetched during checkForUpdate)
+      if (release) {
+        const prev = await this.resolveCurrentVersion();
         await storage.setPreviousVersion(prev);
-        await storage.setCurrentVersion(resolvedRelease.version);
+        await storage.setCurrentVersion(release.version);
         this.eventReporter?.report(
-          resolvedRelease.id,
-          resolvedRelease.version,
+          release.id,
+          release.version,
           "download_complete",
           undefined,
           { duration_ms: downloadMs },
         );
         this.eventReporter?.report(
-          resolvedRelease.id,
-          resolvedRelease.version,
+          release.id,
+          release.version,
           "staged",
         );
       }

@@ -20,6 +20,13 @@ export function requireAdminSession(req: Request, res: Response, next: NextFunct
 
 const loginSchema = z.object({ password: z.string().min(1) });
 
+const cookieOptions = {
+  httpOnly: true,
+  sameSite: 'lax' as const,
+  maxAge: SESSION_TTL_MS,
+  secure: process.env.NODE_ENV === 'production',
+};
+
 // POST /admin/session/login
 router.post('/login', (req: Request, res: Response) => {
   const parsed = loginSchema.safeParse(req.body);
@@ -27,22 +34,38 @@ router.post('/login', (req: Request, res: Response) => {
   const apiKey = process.env.OTA_API_KEY;
 
   if (!apiKey) {
+    if (process.env.NODE_ENV === 'production') {
+      // Block access when auth is unconfigured in production
+      res.status(503).json({ success: false, error: 'Admin auth not configured' });
+      return;
+    }
     // Dev mode — no auth configured, grant access
     const token = crypto.randomBytes(32).toString('hex');
     sessions.set(token, Date.now() + SESSION_TTL_MS);
-    res.cookie('admin_session', token, { httpOnly: true, sameSite: 'lax', maxAge: SESSION_TTL_MS });
+    res.cookie('admin_session', token, cookieOptions);
     res.json({ success: true });
     return;
   }
 
-  if (!password || password !== apiKey) {
+  if (!password) {
+    res.status(401).json({ success: false, error: 'Invalid password' });
+    return;
+  }
+
+  // Constant-time comparison prevents timing attacks
+  const apiKeyBuf = Buffer.from(apiKey);
+  const passwordBuf = Buffer.from(password);
+  // Compare a same-length dummy buffer when lengths differ to avoid early-exit timing oracle
+  const dummyBuf = Buffer.alloc(apiKeyBuf.length);
+  const compareBuf = passwordBuf.length === apiKeyBuf.length ? passwordBuf : dummyBuf;
+  if (!crypto.timingSafeEqual(compareBuf, apiKeyBuf)) {
     res.status(401).json({ success: false, error: 'Invalid password' });
     return;
   }
 
   const token = crypto.randomBytes(32).toString('hex');
   sessions.set(token, Date.now() + SESSION_TTL_MS);
-  res.cookie('admin_session', token, { httpOnly: true, sameSite: 'lax', maxAge: SESSION_TTL_MS });
+  res.cookie('admin_session', token, cookieOptions);
   res.json({ success: true });
 });
 

@@ -229,10 +229,14 @@ httpServer.listen(PORT, () => {
   const authMode = process.env.OTA_API_KEY ? 'bearer auth enabled' : 'auth disabled (dev)';
   logger.info({ port: PORT, authMode }, 'OTA server listening');
   logger.info({ url: `ws://localhost:${PORT}/ws` }, 'WebSocket server ready');
+  if (process.env.NODE_ENV === 'production' && !process.env.OTA_API_KEY) {
+    logger.error('OTA_API_KEY is not set — admin access is unsecured in production');
+  }
   runMigrations().catch(e => logger.error({ err: e }, 'Migration failed'));
   seedDemoData();
   startRolloutScheduler();
-  // Alert engine: evaluate rules every 5 minutes
+  // Alert engine: evaluate rules immediately at startup then every 5 minutes
+  runAlertEngine().catch(e => logger.error({ err: e }, 'alertEngine startup error'));
   setInterval(() => { runAlertEngine().catch(e => logger.error({ err: e }, 'alertEngine error')); }, 5 * 60_000);
   // Data TTL cleanup: run at startup (after 5s) then daily
   setTimeout(() => { try { runCleanup(); } catch (e) { logger.warn({ err: e }, 'cleanup startup error'); } }, 5_000);
