@@ -20,7 +20,7 @@ const QuerySchema = z.object({
 interface FlagRow { id: string; key: string; enabled: number; targeting: string | null; }
 interface ExperimentRow { id: string; key: string; status: string; variants: string; targeting: string | null; }
 interface UrlRow { id: string; key: string; value: string; targeting: string | null; }
-interface KillSwitchRow { id: string; key: string; active: number; targeting: string | null; }
+interface KillSwitchRow { id: string; key: string; active: number; percentage: number; targeting: string | null; }
 interface AssignmentRow { variant_id: string; }
 
 /**
@@ -102,9 +102,12 @@ router.get('/', (req, res) => {
 
   // ── Kill switches ─────────────────────────────────────────────────────────
   // Only active kill switches whose targeting rule matches the current device/user are returned.
-  const ksRows = db.prepare('SELECT key, active, targeting FROM kill_switches WHERE active = 1').all() as KillSwitchRow[];
+  // If percentage < 100, apply DJB2 bucketing to limit rollout to that fraction of installs.
+  const ksRows = db.prepare('SELECT key, active, percentage, targeting FROM kill_switches WHERE active = 1').all() as KillSwitchRow[];
   const kill_switches: string[] = [];
   for (const ks of ksRows) {
+    const pct = ks.percentage ?? 100;
+    if (pct < 100 && djb2(install_id + ks.key) % 100 >= pct) continue;
     const rule = parseTargeting(ks.targeting);
     const deviceCtx: DeviceContext = { platform, nativeVersion: native_version, installId: install_id, entityKey: ks.key };
     if (!rule || evaluateTargeting(rule, deviceCtx, userCtx, db)) {
@@ -118,6 +121,24 @@ router.get('/', (req, res) => {
   const version = djb2(JSON.stringify(responseData)).toString(16);
 
   return res.json({ success: true, data: { ...responseData, version } });
+});
+
+// GET /api/config/snapshot — raw (untargeted) export of all config for admin download
+router.get('/snapshot', (_req, res) => {
+  const flags = (db.prepare('SELECT key, enabled, description, targeting FROM feature_flags ORDER BY key ASC').all() as FlagRow[])
+    .map(f => ({ key: f.key, enabled: f.enabled === 1, targeting: f.targeting ? JSON.parse(f.targeting) : null }));
+
+  const experiments = (db.prepare('SELECT key, status, variants, targeting FROM experiments ORDER BY key ASC').all() as ExperimentRow[])
+    .map(e => ({ key: e.key, status: e.status, variants: JSON.parse(e.variants) as unknown, targeting: e.targeting ? JSON.parse(e.targeting) : null }));
+
+  const kill_switches = (db.prepare('SELECT key, active, percentage, targeting FROM kill_switches ORDER BY key ASC').all() as KillSwitchRow[])
+    .map(k => ({ key: k.key, active: k.active === 1, percentage: k.percentage ?? 100, targeting: k.targeting ? JSON.parse(k.targeting) : null }));
+
+  const urls = (db.prepare('SELECT key, value, targeting FROM dynamic_urls ORDER BY key ASC').all() as UrlRow[])
+    .map(u => ({ key: u.key, value: u.value, targeting: u.targeting ? JSON.parse(u.targeting) : null }));
+
+  res.setHeader('Content-Disposition', `attachment; filename="config-snapshot-${Date.now()}.json"`);
+  return res.json({ exported_at: new Date().toISOString(), flags, experiments, kill_switches, urls });
 });
 
 export default router;

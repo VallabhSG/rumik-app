@@ -8,6 +8,14 @@ const router = Router();
 const sessions = new Map<string, number>();
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
 
+// Purge expired sessions every 30 minutes to prevent unbounded Map growth
+setInterval(() => {
+  const now = Date.now();
+  for (const [token, expiry] of sessions) {
+    if (now > expiry) sessions.delete(token);
+  }
+}, 30 * 60_000).unref();
+
 export function isValidAdminSession(req: Request): boolean {
   const token = req.cookies?.admin_session as string | undefined;
   if (!token) return false;

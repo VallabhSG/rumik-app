@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
 import db from '../db.js';
 import { logChange, diffObjects } from '../services/audit.js';
+import { notifyAdminChange } from '../services/notifier.js';
 
 const router = Router();
 
@@ -77,6 +78,7 @@ router.post('/', (req, res) => {
   }
 
   logChange('flag', id, 'created', null, res.locals.actor as string);
+  void notifyAdminChange('Feature Flag', key, 'created', enabled ? 'Initially enabled' : 'Initially disabled');
   const row = db.prepare('SELECT * FROM feature_flags WHERE id = ?').get(id) as FlagRow;
   return res.status(201).json({ success: true, data: parseFlag(row) });
 });
@@ -108,6 +110,9 @@ router.patch('/:id', (req, res) => {
     { enabled: existing.enabled, description: existing.description, targeting: existing.targeting },
     { enabled: updated.enabled, description: updated.description, targeting: updated.targeting },
   ), res.locals.actor as string);
+  if (updates.enabled !== undefined && existing.enabled !== updated.enabled) {
+    void notifyAdminChange('Feature Flag', updated.key, updated.enabled ? 'activated' : 'deactivated');
+  }
   return res.json({ success: true, data: parseFlag(updated) });
 });
 
@@ -118,6 +123,7 @@ router.delete('/:id', (req, res) => {
 
   db.prepare('DELETE FROM feature_flags WHERE id = ?').run(req.params.id);
   logChange('flag', req.params.id, 'deleted', null, res.locals.actor as string);
+  void notifyAdminChange('Feature Flag', existing.key, 'deleted');
   return res.json({ success: true, data: null });
 });
 

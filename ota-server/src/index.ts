@@ -7,7 +7,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import { bearerAuth } from './middleware/auth.js';
-import adminSessionRouter, { requireAdminSession } from './routes/adminSession.js';
+import adminSessionRouter, { requireAdminSession, isValidAdminSession } from './routes/adminSession.js';
 import releasesRouter from './routes/releases.js';
 import rollbacksRouter from './routes/rollbacks.js';
 import metricsRouter from './routes/metrics.js';
@@ -64,6 +64,15 @@ function buildRateLimiter() {
 
 const apiLimiter = buildRateLimiter();
 
+// Strict rate limiter for login: 5 attempts per IP per 15 minutes
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many login attempts, please try again later.' },
+});
+
 // Actor middleware — applied globally so all routes know who made the request
 app.use(actorMiddleware);
 
@@ -95,8 +104,16 @@ app.get('/health', (_req, res) => {
   });
 });
 
-// Prometheus metrics — no auth (scraper access)
-app.use('/metrics', prometheusMetricsRouter);
+// Prometheus metrics — protected in production; open in dev (no OTA_API_KEY)
+app.use('/metrics', (req, res, next) => {
+  const apiKey = process.env.OTA_API_KEY;
+  if (!apiKey) { next(); return; }
+  if (isValidAdminSession(req)) { next(); return; }
+  const header = req.headers.authorization ?? '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (token === apiKey) { next(); return; }
+  res.status(401).json({ success: false, error: 'Unauthorized' });
+}, prometheusMetricsRouter);
 
 // All /api routes: rate limit first, then bearer auth
 app.use('/api', apiLimiter);
@@ -122,7 +139,8 @@ app.get('/api/scheduler', (_req, res) => {
   res.json({ success: true, data: getSchedulerStatus() });
 });
 
-// Admin session routes (no auth required — handles login/logout)
+// Admin session routes (login is rate-limited; no bearer auth required)
+app.use('/admin/session/login', loginLimiter);
 app.use('/admin/session', express.json(), adminSessionRouter);
 
 // Login page and its CSS — served without auth.

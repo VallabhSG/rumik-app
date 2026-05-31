@@ -262,6 +262,10 @@ export function initDb(db: Database.Database): void {
   if (!ksColumns.some(c => c.name === 'targeting')) {
     db.exec(`ALTER TABLE kill_switches ADD COLUMN targeting TEXT`);
   }
+  // Migration: add percentage column to kill_switches (default 100 = affects all users)
+  if (!ksColumns.some(c => c.name === 'percentage')) {
+    db.exec(`ALTER TABLE kill_switches ADD COLUMN percentage INTEGER NOT NULL DEFAULT 100`);
+  }
 }
 
 const DATA_DIR = process.env.DATA_DIR

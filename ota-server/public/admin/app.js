@@ -469,6 +469,7 @@ async function loadKillSwitches() {
         <td><code>${esc(k.key)}</code></td>
         <td><span class="${k.active ? 'badge-active' : 'badge-off'}">${k.active ? 'ACTIVE' : 'Inactive'}</span></td>
         <td>${esc(k.reason || '—')}</td>
+        <td>${(k.percentage ?? 100)}%</td>
         <td>${fmtDate(k.updated_at)}</td>
         <td>
           <div class="ks-actions">
@@ -515,18 +516,23 @@ window.editKS = async function(id) {
     <div class="field">
       <label>Reason</label>
       <input id="ks-reason-field" placeholder="Optional" value="${esc(existing.reason ?? '')}">
+    </div>
+    <div class="field">
+      <label>Rollout % <span style="color:var(--text-muted);font-size:11px">(1–100, DJB2 bucketed)</span></label>
+      <input id="ks-pct-field" type="number" min="1" max="100" value="${existing.percentage ?? 100}">
     </div>`);
 
   if (!res?.confirmed) return;
   const key = document.getElementById('ks-key').value.trim();
   const reason = document.getElementById('ks-reason-field').value.trim();
+  const percentage = Math.min(100, Math.max(1, parseInt(document.getElementById('ks-pct-field').value, 10) || 100));
   if (!key) { toast('Key is required', 'error'); return; }
   try {
     if (id) {
-      await patch(`/kill-switches/${id}`, { reason: reason || null });
+      await patch(`/kill-switches/${id}`, { reason: reason || null, percentage });
       toast('Kill switch updated', 'success');
     } else {
-      await post('/kill-switches', { key, reason: reason || null });
+      await post('/kill-switches', { key, reason: reason || null, percentage });
       toast('Kill switch created', 'success');
     }
     loadKillSwitches();
@@ -1491,23 +1497,32 @@ async function loadResults() {
       try {
         const res = await get(`/experiments/${exp.key}/results`);
         const winnerBadge = res.winner ? `<span class="badge-active">winner: ${esc(res.winner)}</span>` : '';
-        const rows = (res.variants || []).map(v => `
+        const promoteBtn = res.winner && exp.status !== 'completed'
+          ? `<button class="btn btn-ghost" style="margin-left:8px" onclick="promoteVariant('${esc(exp.key)}', '${esc(res.winner)}')">Promote Winner</button>`
+          : '';
+        const rows = (res.variants || []).map(v => {
+          const pVal = v.p_value != null ? v.p_value.toFixed(4) : '—';
+          const sigBadge = v.significant ? '<span class="badge-active" style="font-size:10px">sig</span>' : '';
+          const lift = v.lift_vs_control != null ? `${v.lift_vs_control >= 0 ? '+' : ''}${(v.lift_vs_control * 100).toFixed(1)}%` : '—';
+          return `
           <tr>
             <td>${esc(v.id)}</td>
             <td>${v.exposures}</td>
             <td>${v.conversions}</td>
             <td>${(v.rate * 100).toFixed(1)}%</td>
-            <td>${v.lift_vs_control >= 0 ? '+' : ''}${(v.lift_vs_control * 100).toFixed(1)}%</td>
-          </tr>`).join('');
+            <td>${lift}</td>
+            <td>${pVal} ${sigBadge}</td>
+          </tr>`;
+        }).join('');
         return `
           <div style="margin-bottom:32px">
             <div class="toolbar" style="margin-bottom:8px">
               <h3 style="font-size:14px;font-weight:600"><code>${esc(exp.key)}</code> <span class="badge-${exp.status}">${esc(exp.status)}</span></h3>
-              ${winnerBadge}
+              ${winnerBadge}${promoteBtn}
             </div>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Variant</th><th>Exposures</th><th>Conversions</th><th>Rate</th><th>Lift vs Control</th></tr></thead>
+                <thead><tr><th>Variant</th><th>Exposures</th><th>Conversions</th><th>Rate</th><th>Lift vs Control</th><th>p-value</th></tr></thead>
                 <tbody>${rows}</tbody>
               </table>
             </div>
@@ -1519,6 +1534,35 @@ async function loadResults() {
 }
 
 document.getElementById('btn-refresh-results').onclick = () => loadResults();
+
+window.promoteVariant = async function(experimentKey, variantId) {
+  const res = await openModal(
+    'Promote Winner',
+    `<p>Promote <strong>${esc(variantId)}</strong> to 100% weight and mark <code>${esc(experimentKey)}</code> as completed?</p>
+     <p style="color:var(--text-muted);font-size:12px;margin-top:8px">All other variants will be set to 0% weight. This cannot be undone.</p>`,
+    'Promote'
+  );
+  if (!res?.confirmed) return;
+  try {
+    await post(`/experiments/${experimentKey}/promote`, { variant_id: variantId });
+    toast(`Promoted ${variantId} as winner`, 'success');
+    loadResults();
+  } catch (e) { toast(e.message, 'error'); }
+};
+
+document.getElementById('btn-export-config')?.addEventListener('click', async () => {
+  try {
+    const resp = await fetch('/api/config/snapshot', { credentials: 'include' });
+    if (!resp.ok) throw new Error(await resp.text());
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `config-snapshot-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) { toast(e.message, 'error'); }
+});
 
 // ── Schedules ─────────────────────────────────────────────────────────────────
 

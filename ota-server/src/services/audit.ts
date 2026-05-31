@@ -10,7 +10,8 @@ export type AuditAction =
   | 'deactivated'
   | 'paused'
   | 'rolled_back'
-  | 'assignments_cleared';
+  | 'assignments_cleared'
+  | 'promoted';
 
 export interface AuditEntry {
   id: string;

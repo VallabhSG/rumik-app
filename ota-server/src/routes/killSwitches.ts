@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
 import db from '../db.js';
 import { logChange, diffObjects } from '../services/audit.js';
+import { notifyAdminChange } from '../services/notifier.js';
 
 const router = Router();
 
@@ -16,10 +17,12 @@ const CreateKillSwitchSchema = z.object({
   key: z.string().min(1).regex(/^[a-z0-9_]+$/, 'Key must be snake_case'),
   active: z.boolean().default(false),
   reason: z.string().optional().nullable(),
+  percentage: z.number().int().min(1).max(100).default(100),
 });
 
 const UpdateKillSwitchSchema = z.object({
   reason: z.string().optional().nullable(),
+  percentage: z.number().int().min(1).max(100).optional(),
 });
 
 interface KillSwitchRow {
@@ -27,12 +30,13 @@ interface KillSwitchRow {
   key: string;
   active: number;
   reason: string | null;
+  percentage: number;
   created_at: string;
   updated_at: string;
 }
 
 function parseKillSwitch(row: KillSwitchRow) {
-  return { ...row, active: row.active === 1 };
+  return { ...row, active: row.active === 1, percentage: row.percentage ?? 100 };
 }
 
 // GET /api/kill-switches
@@ -54,14 +58,14 @@ router.post('/', (req, res) => {
   if (!result.success) {
     return res.status(400).json({ success: false, error: result.error.flatten() });
   }
-  const { key, active, reason } = result.data;
+  const { key, active, reason, percentage } = result.data;
   const id = uuid();
   const now = new Date().toISOString();
 
   try {
     db.prepare(
-      'INSERT INTO kill_switches (id, key, active, reason, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(id, key, active ? 1 : 0, reason ?? null, now, now);
+      'INSERT INTO kill_switches (id, key, active, reason, percentage, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(id, key, active ? 1 : 0, reason ?? null, percentage, now, now);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes('UNIQUE constraint failed')) {
@@ -71,6 +75,7 @@ router.post('/', (req, res) => {
   }
 
   logChange('kill_switch', id, 'created', null, res.locals.actor as string);
+  void notifyAdminChange('Kill Switch', key, 'created', `Rollout: ${percentage}%`);
   const row = db.prepare('SELECT * FROM kill_switches WHERE id = ?').get(id) as KillSwitchRow;
   return res.status(201).json({ success: true, data: parseKillSwitch(row) });
 });
@@ -87,14 +92,17 @@ router.patch('/:id', (req, res) => {
 
   const updates = result.data;
   const now = new Date().toISOString();
-  if ('reason' in updates) {
-    db.prepare('UPDATE kill_switches SET reason = ?, updated_at = ? WHERE id = ?').run(updates.reason ?? null, now, req.params.id);
-  }
+  const fields: string[] = ['updated_at = ?'];
+  const values: unknown[] = [now];
+  if ('reason' in updates) { fields.push('reason = ?'); values.push(updates.reason ?? null); }
+  if (updates.percentage !== undefined) { fields.push('percentage = ?'); values.push(updates.percentage); }
+  values.push(req.params.id);
+  db.prepare(`UPDATE kill_switches SET ${fields.join(', ')} WHERE id = ?`).run(...values);
 
   const updated = db.prepare('SELECT * FROM kill_switches WHERE id = ?').get(req.params.id) as KillSwitchRow;
   logChange('kill_switch', req.params.id, 'updated', diffObjects(
-    { reason: existing.reason },
-    { reason: updated.reason },
+    { reason: existing.reason, percentage: existing.percentage },
+    { reason: updated.reason, percentage: updated.percentage },
   ), res.locals.actor as string);
   return res.json({ success: true, data: parseKillSwitch(updated) });
 });
@@ -109,6 +117,7 @@ router.post('/:id/activate', (req, res) => {
 
   const updated = db.prepare('SELECT * FROM kill_switches WHERE id = ?').get(req.params.id) as KillSwitchRow;
   logChange('kill_switch', req.params.id, 'activated', null, res.locals.actor as string);
+  void notifyAdminChange('Kill Switch', updated.key, 'activated', updated.reason ?? undefined);
 
   _broadcast?.({ type: 'kill_switch', key: updated.key, active: true, reason: updated.reason });
   return res.json({ success: true, data: parseKillSwitch(updated) });
@@ -124,6 +133,7 @@ router.post('/:id/deactivate', (req, res) => {
 
   const updated = db.prepare('SELECT * FROM kill_switches WHERE id = ?').get(req.params.id) as KillSwitchRow;
   logChange('kill_switch', req.params.id, 'deactivated', null, res.locals.actor as string);
+  void notifyAdminChange('Kill Switch', updated.key, 'deactivated');
 
   _broadcast?.({ type: 'kill_switch', key: updated.key, active: false, reason: updated.reason });
   return res.json({ success: true, data: parseKillSwitch(updated) });
@@ -136,6 +146,7 @@ router.delete('/:id', (req, res) => {
 
   db.prepare('DELETE FROM kill_switches WHERE id = ?').run(req.params.id);
   logChange('kill_switch', req.params.id, 'deleted', null, res.locals.actor as string);
+  void notifyAdminChange('Kill Switch', existing.key, 'deleted');
   return res.json({ success: true, data: null });
 });
 
