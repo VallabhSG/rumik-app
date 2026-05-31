@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { DeezerTrack } from "./deezer";
+import type { Track } from "./tracks";
 
 const likedKey = (userId: string) => `rumik:${userId}:liked`;
 const recentKey = (userId: string) => `rumik:${userId}:recent`;
@@ -17,13 +17,13 @@ async function writeJSON<T>(key: string, value: T): Promise<void> {
   await AsyncStorage.setItem(key, JSON.stringify(value));
 }
 
-export async function getLiked(userId: string): Promise<DeezerTrack[]> {
-  return readJSON<DeezerTrack[]>(likedKey(userId), []);
+export async function getLiked(userId: string): Promise<Track[]> {
+  return readJSON<Track[]>(likedKey(userId), []);
 }
 
 export async function toggleLike(
   userId: string,
-  track: DeezerTrack,
+  track: Track,
 ): Promise<boolean> {
   const liked = await getLiked(userId);
   const idx = liked.findIndex((t) => t.id === track.id);
@@ -44,15 +44,12 @@ export async function isLiked(
   return liked.some((t) => t.id === trackId);
 }
 
-export async function pushRecent(
-  userId: string,
-  track: DeezerTrack,
-): Promise<void> {
-  const recent = await readJSON<DeezerTrack[]>(recentKey(userId), []);
+export async function pushRecent(userId: string, track: Track): Promise<void> {
+  const recent = await readJSON<Track[]>(recentKey(userId), []);
   const filtered = recent.filter((t) => t.id !== track.id);
   await writeJSON(recentKey(userId), [track, ...filtered].slice(0, 20));
 }
 
-export async function getRecent(userId: string): Promise<DeezerTrack[]> {
-  return readJSON<DeezerTrack[]>(recentKey(userId), []);
+export async function getRecent(userId: string): Promise<Track[]> {
+  return readJSON<Track[]>(recentKey(userId), []);
 }

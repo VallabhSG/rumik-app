@@ -1,4 +1,4 @@
-import { getCharts, searchTracks } from "../../services/deezer";
+import { getCharts, searchTracks } from "../../services/tracks";
 
 const mockFetch = jest.fn();
 global.fetch = mockFetch;

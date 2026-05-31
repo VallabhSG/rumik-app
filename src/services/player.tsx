@@ -8,14 +8,14 @@ import React, {
 } from "react";
 import { createAudioPlayer, setAudioModeAsync } from "expo-audio";
 import type { AudioPlayer } from "expo-audio";
-import type { DeezerTrack } from "./deezer";
+import type { Track } from "./tracks";
 
 interface PlayerState {
-  track: DeezerTrack | null;
+  track: Track | null;
   isPlaying: boolean;
   positionMs: number;
   durationMs: number;
-  play: (track: DeezerTrack) => Promise<void>;
+  play: (track: Track) => Promise<void>;
   pause: () => Promise<void>;
   resume: () => Promise<void>;
   seek: (ms: number) => Promise<void>;
@@ -25,7 +25,7 @@ const PlayerContext = createContext<PlayerState | null>(null);
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const playerRef = useRef<AudioPlayer | null>(null);
-  const [track, setTrack] = useState<DeezerTrack | null>(null);
+  const [track, setTrack] = useState<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [positionMs, setPositionMs] = useState(0);
   const [durationMs, setDurationMs] = useState(0);
@@ -42,7 +42,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(interval);
   }, []);
 
-  const play = useCallback(async (newTrack: DeezerTrack) => {
+  const play = useCallback(async (newTrack: Track) => {
     if (playerRef.current) {
       playerRef.current.remove();
       playerRef.current = null;

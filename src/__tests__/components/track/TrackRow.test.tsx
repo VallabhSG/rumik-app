@@ -1,9 +1,9 @@
 import React from "react";
 import { render, fireEvent } from "@testing-library/react-native";
 import { TrackRow } from "../../../components/track/TrackRow";
-import type { DeezerTrack } from "../../../services/deezer";
+import type { Track } from "../../../services/tracks";
 
-const mockTrack: DeezerTrack = {
+const mockTrack: Track = {
   id: 1,
   title: "Neon Drift",
   artist: { id: 10, name: "Synthwave Radio", picture_medium: "" },

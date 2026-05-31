@@ -13,11 +13,7 @@ import { SectionLabel } from "../../src/components/ui/SectionLabel";
 import { TrackRow } from "../../src/components/track/TrackRow";
 import { usePlayer } from "../../src/services/player";
 import { useMiniPlayerPadding } from "../../src/hooks/useMiniPlayerPadding";
-import {
-  searchTracks,
-  getCharts,
-  type DeezerTrack,
-} from "../../src/services/deezer";
+import { searchTracks, getCharts, type Track } from "../../src/services/tracks";
 import { pushRecent, toggleLike, isLiked } from "../../src/services/library";
 import { Colors, Typography, Spacing, Radius } from "../../src/theme/tokens";
 import { useKillSwitch } from "../../src/hooks/useRemoteConfig";
@@ -31,8 +27,8 @@ export default function DiscoverScreen() {
   const { user } = useUser();
   const userId = user?.id ?? "";
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<DeezerTrack[]>([]);
-  const [charts, setCharts] = useState<DeezerTrack[]>([]);
+  const [results, setResults] = useState<Track[]>([]);
+  const [charts, setCharts] = useState<Track[]>([]);
   const [loading, setLoading] = useState(false);
   const [likedIds, setLikedIds] = useState<Set<number>>(new Set());
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -56,12 +52,12 @@ export default function DiscoverScreen() {
     }, 300);
   }, []);
 
-  const handlePlay = async (track: DeezerTrack) => {
+  const handlePlay = async (track: Track) => {
     await play(track);
     if (userId) await pushRecent(userId, track);
   };
 
-  const handleLike = async (track: DeezerTrack) => {
+  const handleLike = async (track: Track) => {
     if (!userId) return;
     await toggleLike(userId, track);
     const liked = await isLiked(userId, track.id);

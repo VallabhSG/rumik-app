@@ -1,7 +1,7 @@
 import { File, Directory } from "expo-file-system";
 import * as LegacyFS from "expo-file-system/legacy";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { DeezerTrack } from "./deezer";
+import type { Track } from "./tracks";
 
 const OFFLINE_DIR = `${LegacyFS.documentDirectory}offline/`;
 const STORAGE_KEY = "offline:tracks";
@@ -40,7 +40,7 @@ async function saveMeta(meta: Record<number, OfflineMeta>): Promise<void> {
 }
 
 export async function downloadTrack(
-  track: DeezerTrack,
+  track: Track,
   onProgress?: (progress: number) => void,
 ): Promise<void> {
   ensureDir();
