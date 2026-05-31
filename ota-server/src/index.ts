@@ -69,7 +69,30 @@ app.use(actorMiddleware);
 
 // Health check — no auth
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  let dbStatus: 'ok' | 'error' = 'ok';
+  try {
+    db.prepare('SELECT 1').get();
+  } catch {
+    dbStatus = 'error';
+  }
+  const mem = process.memoryUsage();
+  const schedulerStatus = getSchedulerStatus();
+  const status = dbStatus === 'ok' ? 'ok' : 'degraded';
+  res.status(dbStatus === 'ok' ? 200 : 503).json({
+    status,
+    timestamp: new Date().toISOString(),
+    uptime_seconds: Math.floor(process.uptime()),
+    database: dbStatus,
+    memory: {
+      rss_mb: Math.round(mem.rss / 1024 / 1024),
+      heap_used_mb: Math.round(mem.heapUsed / 1024 / 1024),
+      heap_total_mb: Math.round(mem.heapTotal / 1024 / 1024),
+    },
+    services: {
+      rollout_scheduler: schedulerStatus.running ? 'ok' : 'stopped',
+      alert_engine: 'ok',
+    },
+  });
 });
 
 // Prometheus metrics — no auth (scraper access)

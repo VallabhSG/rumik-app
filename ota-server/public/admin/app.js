@@ -3,18 +3,17 @@
 
 // ── API ──────────────────────────────────────────────────────────────────────
 
-const API_KEY = localStorage.getItem('admin_api_key') ?? '';
-if (!API_KEY) { window.location.href = '/admin/login.html'; }
-
 async function api(method, path, body) {
   const res = await fetch(`/api${path}`, {
     method,
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${API_KEY}`,
-    },
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
+  if (res.status === 401) {
+    window.location.href = '/admin/login.html';
+    return;
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(`${res.status}: ${text || res.statusText}`);
@@ -1559,25 +1558,108 @@ document.getElementById('btn-refresh-schedules').onclick = () => loadSchedules()
 
 // ── Build Health ──────────────────────────────────────────────────────────────
 
+let _bhRefreshTimer = null;
+
+function fmtUptime(seconds) {
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return `${h}h ${m}m`;
+}
+
 async function loadBuildHealth() {
   const releasesEl = document.getElementById('bh-releases-table');
   const killsEl = document.getElementById('bh-kills-table');
+  const schedulerEl = document.getElementById('bh-scheduler-detail');
   releasesEl.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>';
   killsEl.innerHTML = '<tr><td colspan="2" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>';
 
-  const [relData, killData, alertData] = await Promise.allSettled([
+  const [healthData, relData, killData, alertData, flagData, expData, schedulerData] = await Promise.allSettled([
+    fetch('/health', { credentials: 'include' }).then(r => r.json()),
     get('/releases'),
     get('/kill-switches'),
     get('/alerts/rules'),
+    get('/flags'),
+    get('/experiments'),
+    fetch('/api/scheduler', { credentials: 'include' }).then(r => r.json()),
   ]);
 
-  // Releases
+  // ── Server Health ──
+  const health = healthData.status === 'fulfilled' ? healthData.value : null;
+  const serverOk = health?.status === 'ok';
+  const serverStatusEl = document.getElementById('bh-server-status');
+  serverStatusEl.textContent = health ? health.status.toUpperCase() : 'ERROR';
+  serverStatusEl.style.color = serverOk ? 'var(--green,#22c55e)' : 'var(--red,#ef4444)';
+
+  document.getElementById('bh-uptime').textContent = health ? fmtUptime(health.uptime_seconds) : '—';
+  document.getElementById('bh-heap').textContent = health ? `${health.memory.heap_used_mb} MB` : '—';
+
+  const dbEl = document.getElementById('bh-db-status');
+  const dbOk = health?.database === 'ok';
+  dbEl.textContent = health ? (dbOk ? '✓ OK' : '✗ ERROR') : '—';
+  dbEl.style.color = dbOk ? 'var(--green,#22c55e)' : 'var(--red,#ef4444)';
+
+  const svcEl = document.getElementById('bh-scheduler-status');
+  const svcOk = health?.services?.rollout_scheduler === 'ok';
+  svcEl.textContent = health ? (svcOk ? '✓ OK' : '✗ STOPPED') : '—';
+  svcEl.style.color = svcOk ? 'var(--green,#22c55e)' : 'var(--red,#ef4444)';
+
+  // ── Summary Counters ──
   const releases = relData.status === 'fulfilled' ? (relData.value.data ?? []) : [];
   const active = releases.filter(r => r.status === 'active');
   const paused = releases.filter(r => r.status === 'paused');
   document.getElementById('bh-active-releases').textContent = active.length;
   document.getElementById('bh-paused').textContent = paused.length;
 
+  const kills = killData.status === 'fulfilled' ? (killData.value.data ?? []) : [];
+  const activeKills = kills.filter(k => k.active);
+  const killEl = document.getElementById('bh-kill-switches');
+  killEl.textContent = activeKills.length;
+  killEl.style.color = activeKills.length > 0 ? 'var(--orange,#f97316)' : 'var(--green,#22c55e)';
+
+  const alerts = alertData.status === 'fulfilled' ? (alertData.value.data ?? []) : [];
+  document.getElementById('bh-alert-rules').textContent = alerts.length;
+
+  const flags = flagData.status === 'fulfilled' ? (flagData.value.data ?? []) : [];
+  document.getElementById('bh-flags-enabled').textContent = flags.filter(f => f.enabled).length;
+
+  const experiments = expData.status === 'fulfilled' ? (expData.value.data ?? []) : [];
+  document.getElementById('bh-experiments-active').textContent = experiments.filter(e => e.status === 'active').length;
+
+  // ── Rollout Scheduler ──
+  const scheduler = schedulerData.status === 'fulfilled' ? schedulerData.value.data : null;
+  if (!scheduler) {
+    schedulerEl.innerHTML = '<div style="color:var(--text-muted);padding:16px">Could not load scheduler status.</div>';
+  } else if (!scheduler.pendingReleases.length) {
+    schedulerEl.innerHTML = '<div style="color:var(--text-muted);padding:16px">No releases currently in staged rollout. All releases are at 100% or rolled back.</div>';
+  } else {
+    schedulerEl.innerHTML = `
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Version</th><th>Channel</th><th>Current</th><th>Next Stage</th><th>Hours Elapsed</th><th>Hours Required</th><th>Crash Rate</th><th>Ready</th></tr></thead>
+          <tbody>
+            ${scheduler.pendingReleases.map(r => {
+              const readyCls = r.readyToAdvance ? 'color:var(--green,#22c55e)' : 'color:var(--orange,#f97316)';
+              const crashCls = r.crashRate > 0.05 ? 'color:var(--red,#ef4444)' : 'color:var(--text-muted)';
+              return `<tr>
+                <td><strong>${esc(r.version)}</strong></td>
+                <td>${esc(r.channel)}</td>
+                <td>${r.currentPct}%</td>
+                <td>${r.nextPct !== null ? r.nextPct + '%' : '100% (final)'}
+                </td>
+                <td>${r.hoursElapsed.toFixed(1)}h</td>
+                <td>${r.hoursRequired}h</td>
+                <td style="${crashCls}">${(r.crashRate * 100).toFixed(1)}%</td>
+                <td style="${readyCls}">${r.readyToAdvance ? '✓' : '⏳'}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  // ── Releases Table ──
   if (!releases.length) {
     releasesEl.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-muted)">No releases yet.</td></tr>';
   } else {
@@ -1602,28 +1684,30 @@ async function loadBuildHealth() {
     }).join('');
   }
 
-  // Kill switches
-  const kills = killData.status === 'fulfilled' ? (killData.value.data ?? []) : [];
-  const activeKills = kills.filter(k => k.active);
-  document.getElementById('bh-kill-switches').textContent = activeKills.length;
-  document.getElementById('bh-kill-switches').style.color = activeKills.length > 0 ? 'var(--orange,#f97316)' : 'var(--green,#22c55e)';
-
+  // ── Kill Switches Table ──
   if (!activeKills.length) {
     killsEl.innerHTML = '<tr><td colspan="2" style="text-align:center;padding:24px;color:var(--text-muted)">No active kill switches.</td></tr>';
   } else {
     killsEl.innerHTML = activeKills.map(k => `
       <tr>
         <td><code>${esc(k.key)}</code></td>
-        <td>${esc(k.description ?? '—')}</td>
+        <td>${esc(k.reason ?? k.description ?? '—')}</td>
       </tr>`).join('');
   }
-
-  // Alert rules
-  const alerts = alertData.status === 'fulfilled' ? (alertData.value.data ?? []) : [];
-  document.getElementById('bh-alert-rules').textContent = alerts.length;
 }
 
 document.getElementById('btn-refresh-build-health').onclick = () => loadBuildHealth();
+
+// Start auto-refresh when Build Health tab becomes active, stop when leaving
+document.querySelectorAll('.tab').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    clearInterval(_bhRefreshTimer);
+    _bhRefreshTimer = null;
+    if (btn.dataset.tab === 'build-health') {
+      _bhRefreshTimer = setInterval(loadBuildHealth, 30_000);
+    }
+  });
+});
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 

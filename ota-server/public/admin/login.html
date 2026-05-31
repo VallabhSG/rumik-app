@@ -60,10 +60,12 @@
       const res = await fetch('/admin/session/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ password }),
       });
       if (res.ok) {
-        localStorage.setItem('admin_api_key', password);
+        // Session cookie set by server — no key stored in browser storage
+        localStorage.removeItem('admin_api_key');
         window.location.href = '/admin/';
       } else {
         errEl.style.display = 'block';
