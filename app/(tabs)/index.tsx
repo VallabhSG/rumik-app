@@ -14,11 +14,7 @@ import { SectionLabel } from "../../src/components/ui/SectionLabel";
 import { TrackRow } from "../../src/components/track/TrackRow";
 import { TrackCard } from "../../src/components/track/TrackCard";
 import { usePlayer } from "../../src/services/player";
-import {
-  getCharts,
-  searchTracks,
-  type DeezerTrack,
-} from "../../src/services/deezer";
+import { getCharts, searchTracks, type Track } from "../../src/services/tracks";
 import {
   getRecent,
   pushRecent,
@@ -42,15 +38,15 @@ const GENRE_QUERIES: Record<string, string> = {
 export default function HomeScreen() {
   const { user } = useUser();
   const { play } = usePlayer();
-  const [charts, setCharts] = useState<DeezerTrack[]>([]);
-  const [recent, setRecent] = useState<DeezerTrack[]>([]);
+  const [charts, setCharts] = useState<Track[]>([]);
+  const [recent, setRecent] = useState<Track[]>([]);
   const [likedIds, setLikedIds] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
   const miniPlayerPadding = useMiniPlayerPadding();
   const showGenrePills = useFeatureFlag("show_genre_pills");
   const showPremiumUpsell = useFeatureFlag("show_premium_upsell");
   const showNewReleases = useFeatureFlag("new_releases");
-  const [newReleases, setNewReleases] = useState<DeezerTrack[]>([]);
+  const [newReleases, setNewReleases] = useState<Track[]>([]);
   const greetingStyle = useExperiment("tagline_test", "control");
   const chartLimit = parseInt(useExperiment("chart_limit", "8"), 10);
   const homeLayout = useExperiment("home_layout", "control");
@@ -83,12 +79,12 @@ export default function HomeScreen() {
     searchTracks("new music releases", 10).then(setNewReleases);
   }, [showNewReleases]);
 
-  const handlePlay = async (track: DeezerTrack) => {
+  const handlePlay = async (track: Track) => {
     await play(track);
     if (userId) await pushRecent(userId, track);
   };
 
-  const handleLike = async (track: DeezerTrack) => {
+  const handleLike = async (track: Track) => {
     if (!userId) return;
     await toggleLike(userId, track);
     const liked = await isLiked(userId, track.id);

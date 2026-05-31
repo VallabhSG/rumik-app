@@ -12,7 +12,7 @@ import { useFocusEffect } from "expo-router";
 import { TrackRow } from "../../src/components/track/TrackRow";
 import { usePlayer } from "../../src/services/player";
 import { useMiniPlayerPadding } from "../../src/hooks/useMiniPlayerPadding";
-import type { DeezerTrack } from "../../src/services/deezer";
+import type { Track } from "../../src/services/tracks";
 import {
   getLiked,
   toggleLike,
@@ -30,8 +30,8 @@ export default function LibraryScreen() {
   const { play } = usePlayer();
   const miniPlayerPadding = useMiniPlayerPadding();
   const [activeTab, setActiveTab] = useState<Tab>("Liked");
-  const [liked, setLiked] = useState<DeezerTrack[]>([]);
-  const [recent, setRecent] = useState<DeezerTrack[]>([]);
+  const [liked, setLiked] = useState<Track[]>([]);
+  const [recent, setRecent] = useState<Track[]>([]);
 
   const refresh = useCallback(async () => {
     if (!userId) return;
@@ -46,12 +46,12 @@ export default function LibraryScreen() {
     }, [refresh]),
   );
 
-  const handlePlay = async (track: DeezerTrack) => {
+  const handlePlay = async (track: Track) => {
     await play(track);
     if (userId) await pushRecent(userId, track);
   };
 
-  const handleLike = async (track: DeezerTrack) => {
+  const handleLike = async (track: Track) => {
     if (!userId) return;
     await toggleLike(userId, track);
     refresh();

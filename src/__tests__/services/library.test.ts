@@ -6,7 +6,7 @@ import {
   pushRecent,
   getRecent,
 } from "../../services/library";
-import type { DeezerTrack } from "../../services/deezer";
+import type { Track } from "../../services/tracks";
 
 jest.mock("@react-native-async-storage/async-storage", () =>
   jest.requireActual(
@@ -15,7 +15,7 @@ jest.mock("@react-native-async-storage/async-storage", () =>
 );
 
 const USER = "user_clerk_123";
-const mockTrack: DeezerTrack = {
+const mockTrack: Track = {
   id: 1,
   title: "Neon Drift",
   artist: { id: 10, name: "Artist", picture_medium: "" },

@@ -58,16 +58,8 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Build Android APK (staging)
-        run: eas build --platform android --profile staging --non-interactive --wait
-        env:
-          EAS_BUILD_AUTOCOMMIT: 1
-
-      - name: Download APK artifact
-        run: |
-          BUILD_URL=$(eas build:list --platform android --status finished --limit 1 --json \
-            | jq -r '.[0].artifacts.buildUrl')
-          curl -L "$BUILD_URL" -o rumik-staging.apk
+      - name: Build Android APK (local — no EAS cloud quota)
+        run: eas build --local --platform android --profile staging --non-interactive --output ./rumik-staging.apk
 
       - name: Upload to Firebase App Distribution
         uses: wzieba/Firebase-Distribution-Github-Action@v1
@@ -81,13 +73,19 @@ jobs:
             Commit: ${{ github.sha }}
             ${{ github.event.head_commit.message }}
 
-  # ── iOS → TestFlight ──────────────────────────────────────────────────────────
-  # Disabled: Apple Developer account required ($99/year).
-  # Required secrets: EXPO_TOKEN, EXPO_APPLE_ID, EXPO_APPLE_APP_SPECIFIC_PASSWORD
+  # ── iOS → OTA update (Expo Go) ────────────────────────────────────────────────
+  # Publishes a JS bundle to the 'staging' EAS Update branch.
+  # iOS testers open the app in Expo Go — updates apply automatically.
+  # No Apple Developer account needed; EAS Update free tier is generous.
+  # To enable full TestFlight distribution, replace this job with the commented
+  # staging-ios-testflight job below and add EXPO_APPLE_* secrets.
   staging-ios:
-    name: iOS Staging (TestFlight)
-    runs-on: macos-14
-    if: false
+    name: iOS Staging (OTA → Expo Go)
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'push' ||
+      github.event.inputs.platform == 'all' ||
+      github.event.inputs.platform == 'ios'
     steps:
       - uses: actions/checkout@v4
 
@@ -101,16 +99,9 @@ jobs:
       - name: Restore pnpm store
         uses: actions/cache@v4
         with:
-          path: ~/Library/pnpm/store
-          key: pnpm-store-macos-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: pnpm-store-macos-
-
-      - name: Restore CocoaPods cache
-        uses: actions/cache@v4
-        with:
-          path: ios/Pods
-          key: pods-${{ runner.os }}-${{ hashFiles('ios/Podfile.lock') }}
-          restore-keys: pods-${{ runner.os }}-
+          path: ~/.local/share/pnpm/store
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-${{ runner.os }}-
 
       - run: pnpm install --frozen-lockfile
 
@@ -120,12 +111,20 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Build iOS (staging) + submit to TestFlight
-        run: eas build --platform ios --profile staging --non-interactive --wait --auto-submit
+      - name: Publish OTA update to staging branch
+        run: eas update --branch staging --message "staging: ${{ github.sha }}" --non-interactive
         env:
-          EAS_BUILD_AUTOCOMMIT: 1
-          EXPO_APPLE_ID: ${{ secrets.EXPO_APPLE_ID }}
-          EXPO_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.EXPO_APPLE_APP_SPECIFIC_PASSWORD }}
+          EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          EXPO_PUBLIC_OTA_SERVER_URL: ${{ secrets.STAGING_OTA_URL }}
+
+      - name: Write job summary
+        run: |
+          echo "## iOS Staging OTA" >> $GITHUB_STEP_SUMMARY
+          echo "JS bundle published to **staging** EAS Update branch." >> $GITHUB_STEP_SUMMARY
+          echo "**Testers:** open Expo Go → scan project QR → updates apply automatically." >> $GITHUB_STEP_SUMMARY
+          echo "Commit: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> To enable TestFlight, swap this job for staging-ios-testflight and add EXPO_APPLE_* secrets." >> $GITHUB_STEP_SUMMARY
 
   # ── Web → Vercel preview ──────────────────────────────────────────────────────
   # Required secrets: VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID

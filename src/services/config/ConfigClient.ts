@@ -151,14 +151,18 @@ export class ConfigClient {
     body: { install_id: string; variant_id: string; user_id?: string },
   ): Promise<void> {
     if (!this.options.serverUrl) return;
-    await fetch(
-      `${this.options.serverUrl}/api/experiments/${experimentKey}/expose`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      },
-    );
+    try {
+      await fetch(
+        `${this.options.serverUrl}/api/experiments/${experimentKey}/expose`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
+    } catch {
+      // best-effort — tracking must not affect the caller
+    }
   }
 
   async trackConversion(
@@ -172,14 +176,18 @@ export class ConfigClient {
     },
   ): Promise<void> {
     if (!this.options.serverUrl) return;
-    await fetch(
-      `${this.options.serverUrl}/api/experiments/${experimentKey}/convert`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      },
-    );
+    try {
+      await fetch(
+        `${this.options.serverUrl}/api/experiments/${experimentKey}/convert`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
+    } catch {
+      // best-effort — tracking must not affect the caller
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -246,7 +254,8 @@ export class ConfigClient {
 
   private scheduleTtlRefresh(ttlSeconds: number): void {
     if (this.ttlTimer) clearTimeout(this.ttlTimer);
-    const effectiveTtl = this.options.ttl ?? ttlSeconds;
+    // Server-provided TTL takes precedence; fall back to client option
+    const effectiveTtl = ttlSeconds ?? this.options.ttl;
     this.ttlTimer = setTimeout(
       () => void this.fetchAndUpdate(),
       effectiveTtl * 1_000,

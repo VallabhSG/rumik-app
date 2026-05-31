@@ -3,18 +3,17 @@
 
 // ── API ──────────────────────────────────────────────────────────────────────
 
-const API_KEY = localStorage.getItem('admin_api_key') ?? '';
-if (!API_KEY) { window.location.href = '/admin/login.html'; }
-
 async function api(method, path, body) {
   const res = await fetch(`/api${path}`, {
     method,
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${API_KEY}`,
-    },
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
+  if (res.status === 401) {
+    window.location.href = '/admin/login.html';
+    return;
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(`${res.status}: ${text || res.statusText}`);
@@ -87,7 +86,8 @@ function loadPanel(tab) {
   if (tab === 'audit')       loadAudit(0);
   if (tab === 'segments')    loadSegments();
   if (tab === 'results')     loadResults();
-  if (tab === 'schedules')   loadSchedules();
+  if (tab === 'schedules')    loadSchedules();
+  if (tab === 'build-health') loadBuildHealth();
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -469,6 +469,7 @@ async function loadKillSwitches() {
         <td><code>${esc(k.key)}</code></td>
         <td><span class="${k.active ? 'badge-active' : 'badge-off'}">${k.active ? 'ACTIVE' : 'Inactive'}</span></td>
         <td>${esc(k.reason || '—')}</td>
+        <td>${(k.percentage ?? 100)}%</td>
         <td>${fmtDate(k.updated_at)}</td>
         <td>
           <div class="ks-actions">
@@ -515,18 +516,23 @@ window.editKS = async function(id) {
     <div class="field">
       <label>Reason</label>
       <input id="ks-reason-field" placeholder="Optional" value="${esc(existing.reason ?? '')}">
+    </div>
+    <div class="field">
+      <label>Rollout % <span style="color:var(--text-muted);font-size:11px">(1–100, DJB2 bucketed)</span></label>
+      <input id="ks-pct-field" type="number" min="1" max="100" value="${existing.percentage ?? 100}">
     </div>`);
 
   if (!res?.confirmed) return;
   const key = document.getElementById('ks-key').value.trim();
   const reason = document.getElementById('ks-reason-field').value.trim();
+  const percentage = Math.min(100, Math.max(1, parseInt(document.getElementById('ks-pct-field').value, 10) || 100));
   if (!key) { toast('Key is required', 'error'); return; }
   try {
     if (id) {
-      await patch(`/kill-switches/${id}`, { reason: reason || null });
+      await patch(`/kill-switches/${id}`, { reason: reason || null, percentage });
       toast('Kill switch updated', 'success');
     } else {
-      await post('/kill-switches', { key, reason: reason || null });
+      await post('/kill-switches', { key, reason: reason || null, percentage });
       toast('Kill switch created', 'success');
     }
     loadKillSwitches();
@@ -1491,23 +1497,32 @@ async function loadResults() {
       try {
         const res = await get(`/experiments/${exp.key}/results`);
         const winnerBadge = res.winner ? `<span class="badge-active">winner: ${esc(res.winner)}</span>` : '';
-        const rows = (res.variants || []).map(v => `
+        const promoteBtn = res.winner && exp.status !== 'completed'
+          ? `<button class="btn btn-ghost" style="margin-left:8px" onclick="promoteVariant('${esc(exp.key)}', '${esc(res.winner)}')">Promote Winner</button>`
+          : '';
+        const rows = (res.variants || []).map(v => {
+          const pVal = v.p_value != null ? v.p_value.toFixed(4) : '—';
+          const sigBadge = v.significant ? '<span class="badge-active" style="font-size:10px">sig</span>' : '';
+          const lift = v.lift_vs_control != null ? `${v.lift_vs_control >= 0 ? '+' : ''}${(v.lift_vs_control * 100).toFixed(1)}%` : '—';
+          return `
           <tr>
             <td>${esc(v.id)}</td>
             <td>${v.exposures}</td>
             <td>${v.conversions}</td>
             <td>${(v.rate * 100).toFixed(1)}%</td>
-            <td>${v.lift_vs_control >= 0 ? '+' : ''}${(v.lift_vs_control * 100).toFixed(1)}%</td>
-          </tr>`).join('');
+            <td>${lift}</td>
+            <td>${pVal} ${sigBadge}</td>
+          </tr>`;
+        }).join('');
         return `
           <div style="margin-bottom:32px">
             <div class="toolbar" style="margin-bottom:8px">
               <h3 style="font-size:14px;font-weight:600"><code>${esc(exp.key)}</code> <span class="badge-${exp.status}">${esc(exp.status)}</span></h3>
-              ${winnerBadge}
+              ${winnerBadge}${promoteBtn}
             </div>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Variant</th><th>Exposures</th><th>Conversions</th><th>Rate</th><th>Lift vs Control</th></tr></thead>
+                <thead><tr><th>Variant</th><th>Exposures</th><th>Conversions</th><th>Rate</th><th>Lift vs Control</th><th>p-value</th></tr></thead>
                 <tbody>${rows}</tbody>
               </table>
             </div>
@@ -1519,6 +1534,35 @@ async function loadResults() {
 }
 
 document.getElementById('btn-refresh-results').onclick = () => loadResults();
+
+window.promoteVariant = async function(experimentKey, variantId) {
+  const res = await openModal(
+    'Promote Winner',
+    `<p>Promote <strong>${esc(variantId)}</strong> to 100% weight and mark <code>${esc(experimentKey)}</code> as completed?</p>
+     <p style="color:var(--text-muted);font-size:12px;margin-top:8px">All other variants will be set to 0% weight. This cannot be undone.</p>`,
+    'Promote'
+  );
+  if (!res?.confirmed) return;
+  try {
+    await post(`/experiments/${experimentKey}/promote`, { variant_id: variantId });
+    toast(`Promoted ${variantId} as winner`, 'success');
+    loadResults();
+  } catch (e) { toast(e.message, 'error'); }
+};
+
+document.getElementById('btn-export-config')?.addEventListener('click', async () => {
+  try {
+    const resp = await fetch('/api/config/snapshot', { credentials: 'include' });
+    if (!resp.ok) throw new Error(await resp.text());
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `config-snapshot-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) { toast(e.message, 'error'); }
+});
 
 // ── Schedules ─────────────────────────────────────────────────────────────────
 
@@ -1555,6 +1599,159 @@ window.deleteSchedule = async function(id) {
 };
 
 document.getElementById('btn-refresh-schedules').onclick = () => loadSchedules();
+
+// ── Build Health ──────────────────────────────────────────────────────────────
+
+let _bhRefreshTimer = null;
+
+function fmtUptime(seconds) {
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return `${h}h ${m}m`;
+}
+
+async function loadBuildHealth() {
+  const releasesEl = document.getElementById('bh-releases-table');
+  const killsEl = document.getElementById('bh-kills-table');
+  const schedulerEl = document.getElementById('bh-scheduler-detail');
+  releasesEl.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>';
+  killsEl.innerHTML = '<tr><td colspan="2" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>';
+
+  const [healthData, relData, killData, alertData, flagData, expData, schedulerData] = await Promise.allSettled([
+    fetch('/health', { credentials: 'include' }).then(r => r.json()),
+    get('/releases'),
+    get('/kill-switches'),
+    get('/alerts/rules'),
+    get('/flags'),
+    get('/experiments'),
+    fetch('/api/scheduler', { credentials: 'include' }).then(r => r.json()),
+  ]);
+
+  // ── Server Health ──
+  const health = healthData.status === 'fulfilled' ? healthData.value : null;
+  const serverOk = health?.status === 'ok';
+  const serverStatusEl = document.getElementById('bh-server-status');
+  serverStatusEl.textContent = health ? health.status.toUpperCase() : 'ERROR';
+  serverStatusEl.style.color = serverOk ? 'var(--green,#22c55e)' : 'var(--red,#ef4444)';
+
+  document.getElementById('bh-uptime').textContent = health ? fmtUptime(health.uptime_seconds) : '—';
+  document.getElementById('bh-heap').textContent = health ? `${health.memory.heap_used_mb} MB` : '—';
+
+  const dbEl = document.getElementById('bh-db-status');
+  const dbOk = health?.database === 'ok';
+  dbEl.textContent = health ? (dbOk ? '✓ OK' : '✗ ERROR') : '—';
+  dbEl.style.color = dbOk ? 'var(--green,#22c55e)' : 'var(--red,#ef4444)';
+
+  const svcEl = document.getElementById('bh-scheduler-status');
+  const svcOk = health?.services?.rollout_scheduler === 'ok';
+  svcEl.textContent = health ? (svcOk ? '✓ OK' : '✗ STOPPED') : '—';
+  svcEl.style.color = svcOk ? 'var(--green,#22c55e)' : 'var(--red,#ef4444)';
+
+  // ── Summary Counters ──
+  const releases = relData.status === 'fulfilled' ? (relData.value.data ?? []) : [];
+  const active = releases.filter(r => r.status === 'active');
+  const paused = releases.filter(r => r.status === 'paused');
+  document.getElementById('bh-active-releases').textContent = active.length;
+  document.getElementById('bh-paused').textContent = paused.length;
+
+  const kills = killData.status === 'fulfilled' ? (killData.value.data ?? []) : [];
+  const activeKills = kills.filter(k => k.active);
+  const killEl = document.getElementById('bh-kill-switches');
+  killEl.textContent = activeKills.length;
+  killEl.style.color = activeKills.length > 0 ? 'var(--orange,#f97316)' : 'var(--green,#22c55e)';
+
+  const alerts = alertData.status === 'fulfilled' ? (alertData.value.data ?? []) : [];
+  document.getElementById('bh-alert-rules').textContent = alerts.length;
+
+  const flags = flagData.status === 'fulfilled' ? (flagData.value.data ?? []) : [];
+  document.getElementById('bh-flags-enabled').textContent = flags.filter(f => f.enabled).length;
+
+  const experiments = expData.status === 'fulfilled' ? (expData.value.data ?? []) : [];
+  document.getElementById('bh-experiments-active').textContent = experiments.filter(e => e.status === 'active').length;
+
+  // ── Rollout Scheduler ──
+  const scheduler = schedulerData.status === 'fulfilled' ? schedulerData.value.data : null;
+  if (!scheduler) {
+    schedulerEl.innerHTML = '<div style="color:var(--text-muted);padding:16px">Could not load scheduler status.</div>';
+  } else if (!scheduler.pendingReleases.length) {
+    schedulerEl.innerHTML = '<div style="color:var(--text-muted);padding:16px">No releases currently in staged rollout. All releases are at 100% or rolled back.</div>';
+  } else {
+    schedulerEl.innerHTML = `
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Version</th><th>Channel</th><th>Current</th><th>Next Stage</th><th>Hours Elapsed</th><th>Hours Required</th><th>Crash Rate</th><th>Ready</th></tr></thead>
+          <tbody>
+            ${scheduler.pendingReleases.map(r => {
+              const readyCls = r.readyToAdvance ? 'color:var(--green,#22c55e)' : 'color:var(--orange,#f97316)';
+              const crashCls = r.crashRate > 0.05 ? 'color:var(--red,#ef4444)' : 'color:var(--text-muted)';
+              return `<tr>
+                <td><strong>${esc(r.version)}</strong></td>
+                <td>${esc(r.channel)}</td>
+                <td>${r.currentPct}%</td>
+                <td>${r.nextPct !== null ? r.nextPct + '%' : '100% (final)'}
+                </td>
+                <td>${r.hoursElapsed.toFixed(1)}h</td>
+                <td>${r.hoursRequired}h</td>
+                <td style="${crashCls}">${(r.crashRate * 100).toFixed(1)}%</td>
+                <td style="${readyCls}">${r.readyToAdvance ? '✓' : '⏳'}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  // ── Releases Table ──
+  if (!releases.length) {
+    releasesEl.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-muted)">No releases yet.</td></tr>';
+  } else {
+    releasesEl.innerHTML = releases.map(r => {
+      const statusCls = r.status === 'active' ? 'badge-active-release'
+        : r.status === 'paused' ? 'badge-paused-release' : 'badge-rolled_back';
+      const pct = r.rollout_percentage ?? 0;
+      return `
+        <tr>
+          <td><strong>${esc(r.version)}</strong>${r.is_rollback ? ' <span style="font-size:10px;color:var(--orange)">[rollback]</span>' : ''}</td>
+          <td>${esc(r.channel)}</td>
+          <td>${esc(r.platform)}</td>
+          <td>
+            <div class="rollout-wrap">
+              <div class="rollout-bar"><div class="rollout-fill" style="width:${pct}%"></div></div>
+              <span class="rollout-pct">${pct}%</span>
+            </div>
+          </td>
+          <td><span class="${statusCls}">${esc(r.status)}</span></td>
+          <td style="color:var(--text-muted);font-size:12px">${fmtDate(r.created_at)}</td>
+        </tr>`;
+    }).join('');
+  }
+
+  // ── Kill Switches Table ──
+  if (!activeKills.length) {
+    killsEl.innerHTML = '<tr><td colspan="2" style="text-align:center;padding:24px;color:var(--text-muted)">No active kill switches.</td></tr>';
+  } else {
+    killsEl.innerHTML = activeKills.map(k => `
+      <tr>
+        <td><code>${esc(k.key)}</code></td>
+        <td>${esc(k.reason ?? k.description ?? '—')}</td>
+      </tr>`).join('');
+  }
+}
+
+document.getElementById('btn-refresh-build-health').onclick = () => loadBuildHealth();
+
+// Start auto-refresh when Build Health tab becomes active, stop when leaving
+document.querySelectorAll('.tab').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    clearInterval(_bhRefreshTimer);
+    _bhRefreshTimer = null;
+    if (btn.dataset.tab === 'build-health') {
+      _bhRefreshTimer = setInterval(loadBuildHealth, 30_000);
+    }
+  });
+});
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 

@@ -1,11 +1,11 @@
 import React from "react";
 import { View, Text, Image, TouchableOpacity, StyleSheet } from "react-native";
 import { Colors, Typography, Spacing, Radius } from "../../theme/tokens";
-import type { DeezerTrack } from "../../services/deezer";
+import type { Track } from "../../services/tracks";
 
 interface Props {
-  track: DeezerTrack;
-  onPlay: (track: DeezerTrack) => void;
+  track: Track;
+  onPlay: (track: Track) => void;
   label?: string;
 }
 

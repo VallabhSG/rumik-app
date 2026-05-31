@@ -186,6 +186,29 @@ router.post('/:key/convert', (req, res) => {
   return void res.json({ ok: true });
 });
 
+function normalCDF(z: number): number {
+  if (z < -8) return 0;
+  if (z > 8) return 1;
+  const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741;
+  const a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
+  const sign = z < 0 ? -1 : 1;
+  const x = Math.abs(z) / Math.SQRT2;
+  const t = 1 / (1 + p * x);
+  const y = 1 - ((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+  return 0.5 * (1 + sign * y);
+}
+
+function twoProportionZTest(n1: number, x1: number, n2: number, x2: number): { p_value: number; significant: boolean } {
+  if (n1 === 0 || n2 === 0) return { p_value: 1, significant: false };
+  const p1 = x1 / n1, p2 = x2 / n2;
+  const pooled = (x1 + x2) / (n1 + n2);
+  const se = Math.sqrt(pooled * (1 - pooled) * (1 / n1 + 1 / n2));
+  if (se === 0) return { p_value: 1, significant: false };
+  const z = Math.abs(p1 - p2) / se;
+  const p_value = Math.min(1, 2 * (1 - normalCDF(z)));
+  return { p_value: Math.round(p_value * 10000) / 10000, significant: p_value < 0.05 };
+}
+
 // GET /api/experiments/:key/results
 router.get('/:key/results', (req, res) => {
   const exp = db.prepare('SELECT id, variants FROM experiments WHERE key = ?').get(req.params.key) as { id: string; variants: string } | undefined;
@@ -200,18 +223,55 @@ router.get('/:key/results', (req, res) => {
       'SELECT COUNT(DISTINCT install_id) as cnt FROM experiment_conversions WHERE experiment_id = ? AND variant_id = ?'
     ).get(exp.id, v.id) as { cnt: number }).cnt;
     const rate = exposures > 0 ? conversions / exposures : 0;
-    return { id: v.id, exposures, conversions, rate, lift_vs_control: 0 };
+    return { id: v.id, exposures, conversions, rate, lift_vs_control: null as number | null, p_value: null as number | null, significant: false };
   });
 
   const control = variantStats.find(v => v.id === 'control');
-  if (control) {
+  if (control && control.rate > 0) {
     for (const v of variantStats) {
-      v.lift_vs_control = control.rate > 0 ? (v.rate - control.rate) / control.rate : 0;
+      v.lift_vs_control = (v.rate - control.rate) / control.rate;
+      if (v.id !== 'control') {
+        const { p_value, significant } = twoProportionZTest(control.exposures, control.conversions, v.exposures, v.conversions);
+        v.p_value = p_value;
+        v.significant = significant;
+      }
     }
   }
 
-  const winner = variantStats.find(v => v.id !== 'control' && v.lift_vs_control >= 0.1)?.id ?? null;
+  let winner: string | null = null;
+  if (control) {
+    winner = variantStats.find(v => v.id !== 'control' && v.significant && (v.lift_vs_control ?? 0) >= 0.1)?.id ?? null;
+  } else {
+    const sampled = variantStats.filter(v => v.exposures >= 100);
+    if (sampled.length > 0) {
+      const best = sampled.reduce((a, b) => (a.rate >= b.rate ? a : b));
+      winner = best.rate > 0 ? best.id : null;
+    }
+  }
   return void res.json({ variants: variantStats, winner });
+});
+
+// POST /api/experiments/:key/promote — promote a variant to 100% weight and complete the experiment
+router.post('/:key/promote', (req, res) => {
+  const { variant_id } = req.body as { variant_id?: string };
+  if (!variant_id) return void res.status(400).json({ success: false, error: 'variant_id is required' });
+
+  const exp = db.prepare('SELECT * FROM experiments WHERE key = ?').get(req.params.key) as ExperimentRow | undefined;
+  if (!exp) return void res.status(404).json({ success: false, error: 'Experiment not found' });
+
+  const variants = JSON.parse(exp.variants) as Array<{ id: string; weight: number }>;
+  if (!variants.find(v => v.id === variant_id)) {
+    return void res.status(400).json({ success: false, error: `Variant '${variant_id}' not found` });
+  }
+
+  const promoted = variants.map(v => ({ ...v, weight: v.id === variant_id ? 100 : 0 }));
+  const now = new Date().toISOString();
+  db.prepare('UPDATE experiments SET variants = ?, status = ?, updated_at = ? WHERE key = ?')
+    .run(JSON.stringify(promoted), 'completed', now, req.params.key);
+
+  logChange('experiment', exp.id, 'promoted', { variant_id: { old: null, new: variant_id } }, res.locals.actor as string);
+  const updated = db.prepare('SELECT * FROM experiments WHERE key = ?').get(req.params.key) as ExperimentRow;
+  return void res.json({ success: true, data: parseExperiment(updated) });
 });
 
 export default router;

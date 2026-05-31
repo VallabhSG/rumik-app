@@ -1,6 +1,6 @@
 const ITUNES = "https://itunes.apple.com";
 
-export interface DeezerTrack {
+export interface Track {
   id: number;
   title: string;
   artist: { id: number; name: string; picture_medium: string };
@@ -22,7 +22,7 @@ interface RawItunesTrack {
   trackTimeMillis?: number;
 }
 
-function mapTrack(item: RawItunesTrack): DeezerTrack | null {
+function mapTrack(item: RawItunesTrack): Track | null {
   if (!item.previewUrl || item.kind !== "song") return null;
   const art = item.artworkUrl100 ?? "";
   return {
@@ -54,33 +54,33 @@ async function fetchItunes(path: string): Promise<RawItunesTrack[] | null> {
   }
 }
 
-export async function getCharts(limit = 20): Promise<DeezerTrack[]> {
+export async function getCharts(limit = 20): Promise<Track[]> {
   const results = await fetchItunes(
     `/search?term=top+hits&media=music&entity=song&limit=${limit * 2}`,
   );
   if (!results) return [];
   return results
     .map(mapTrack)
-    .filter((t): t is DeezerTrack => t !== null)
+    .filter((t): t is Track => t !== null)
     .slice(0, limit);
 }
 
 export async function searchTracks(
   query: string,
   limit = 30,
-): Promise<DeezerTrack[]> {
+): Promise<Track[]> {
   if (!query.trim()) return [];
   const results = await fetchItunes(
     `/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=${limit}`,
   );
   if (!results) return [];
-  return results.map(mapTrack).filter((t): t is DeezerTrack => t !== null);
+  return results.map(mapTrack).filter((t): t is Track => t !== null);
 }
 
 export async function getArtistTracks(
   artistId: number,
   limit = 10,
-): Promise<DeezerTrack[]> {
+): Promise<Track[]> {
   const results = await fetchItunes(
     `/lookup?id=${artistId}&entity=song&limit=${limit + 1}`,
   );
@@ -90,5 +90,5 @@ export async function getArtistTracks(
       (r: unknown) => (r as { wrapperType?: string }).wrapperType === "track",
     )
     .map(mapTrack)
-    .filter((t): t is DeezerTrack => t !== null);
+    .filter((t): t is Track => t !== null);
 }

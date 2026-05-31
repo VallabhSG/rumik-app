@@ -66,6 +66,31 @@ jobs:
           echo "tag=v${NEXT}" >> $GITHUB_OUTPUT
           echo "version=${NEXT}" >> $GITHUB_OUTPUT
 
+      - name: Bump version in app.json and package.json
+        if: steps.semver.outputs.skip == 'false'
+        run: |
+          VERSION="${{ steps.semver.outputs.version }}"
+          # app.json
+          node -e "
+            const fs = require('fs');
+            const f = 'app.json';
+            const j = JSON.parse(fs.readFileSync(f, 'utf8'));
+            j.expo.version = '$VERSION';
+            fs.writeFileSync(f, JSON.stringify(j, null, 2) + '\n');
+          "
+          # package.json
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+          echo "Bumped app.json and package.json to $VERSION"
+
+      - name: Commit version bump
+        if: steps.semver.outputs.skip == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add app.json package.json
+          git diff --cached --quiet || git commit -m "chore: bump version to ${{ steps.semver.outputs.version }}"
+          git push origin master
+
       - name: Push annotated tag
         if: steps.semver.outputs.skip == 'false'
         run: |

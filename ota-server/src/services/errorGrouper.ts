@@ -2,6 +2,29 @@ import { createHash } from 'crypto';
 import { v4 as uuid } from 'uuid';
 import db from '../db.js';
 
+const PII_PATTERNS: RegExp[] = [
+  /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g,
+  /\b(\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g,
+  /\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|6(?:011|5[0-9]{2})[0-9]{12})\b/g,
+];
+
+function scrubPII(text: string): string {
+  let result = text;
+  for (const pattern of PII_PATTERNS) {
+    result = result.replace(pattern, '[REDACTED]');
+    pattern.lastIndex = 0;
+  }
+  return result;
+}
+
+function scrubFrame(frame: StackFrame): StackFrame {
+  return {
+    ...frame,
+    file: scrubPII(frame.file),
+    func: frame.func ? scrubPII(frame.func) : frame.func,
+  };
+}
+
 interface StackFrame {
   file: string;
   line?: number;
@@ -32,7 +55,12 @@ function computeFingerprint(errorType: string, stackTrace: StackFrame[]): string
   return createHash('sha256').update(`${errorType}::${top}`).digest('hex').slice(0, 16);
 }
 
-export function groupError(payload: ErrorPayload): { group_id: string; is_new: boolean } {
+export function groupError(rawPayload: ErrorPayload): { group_id: string; is_new: boolean } {
+  const payload: ErrorPayload = {
+    ...rawPayload,
+    message: scrubPII(rawPayload.message),
+    stack_trace: rawPayload.stack_trace.map(scrubFrame),
+  };
   const fingerprint = computeFingerprint(payload.error_type, payload.stack_trace);
   const now = new Date().toISOString();
 

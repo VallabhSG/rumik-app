@@ -68,6 +68,12 @@ CLAUDE.md
 PLAN_PART_D.md
 claude.md.txt
 docs/superpowers/
+# Local-only architecture and runbook docs (not needed to run the project)
+docs/architecture.md
+docs/low-level-design.md
+docs/runbooks/
+# Also untrack any previously committed docs at this path prefix
+docs/*.md
 
 # Local env files (keep .env.example out too — use docs/runbook.md for setup)
 .env

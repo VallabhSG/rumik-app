@@ -239,13 +239,12 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
   # ── Android → Firebase (production track) ────────────────────────────────────
-  # Disabled: EAS free-tier build quota exhausted.
+  # Builds locally on the CI runner — no EAS cloud build quota consumed.
   # Required secrets: EXPO_TOKEN, FIREBASE_ANDROID_APP_ID, FIREBASE_SERVICE_ACCOUNT
   release-android:
     name: Android Production (Firebase)
     runs-on: ubuntu-latest
     needs: [version, bump-version]
-    if: false
     steps:
       - uses: actions/checkout@v4
 
@@ -271,16 +270,8 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Build Android (production) + Firebase distribute
-        run: eas build --platform android --profile production --non-interactive --wait
-        env:
-          EAS_BUILD_AUTOCOMMIT: 1
-
-      - name: Download APK and upload to Firebase
-        run: |
-          BUILD_URL=$(eas build:list --platform android --status finished --limit 1 --json \
-            | jq -r '.[0].artifacts.buildUrl')
-          curl -L "$BUILD_URL" -o rumik-production.apk
+      - name: Build Android APK (local — no EAS cloud quota)
+        run: eas build --local --platform android --profile production --non-interactive --output ./rumik-production.apk
 
       - uses: wzieba/Firebase-Distribution-Github-Action@v1
         with:
@@ -291,7 +282,10 @@ jobs:
           releaseNotes: v${{ needs.version.outputs.version }}
 
   # ── iOS → TestFlight (production) ─────────────────────────────────────────────
-  # Disabled: Apple Developer account required ($99/year).
+  # Disabled: Apple Developer account required ($99/year) for code signing.
+  # JS-only releases are already covered by the ota-update job above — users
+  # receive bundle updates automatically without a new App Store submission.
+  # Enable this job only when native code changes require a new binary release.
   # Required secrets: EXPO_TOKEN, EXPO_APPLE_ID, EXPO_APPLE_APP_SPECIFIC_PASSWORD
   release-ios:
     name: iOS Production (TestFlight)

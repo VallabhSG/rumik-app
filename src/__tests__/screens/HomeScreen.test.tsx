@@ -14,7 +14,7 @@ jest.mock("@clerk/clerk-expo", () => ({
   }),
 }));
 
-jest.mock("../../services/deezer", () => ({
+jest.mock("../../services/tracks", () => ({
   getCharts: jest.fn().mockResolvedValue([]),
   searchTracks: jest.fn().mockResolvedValue([]),
 }));

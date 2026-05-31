@@ -8,15 +8,15 @@ import {
   Share,
 } from "react-native";
 import { Colors, Typography, Spacing, Radius } from "../../theme/tokens";
-import type { DeezerTrack } from "../../services/deezer";
+import type { Track } from "../../services/tracks";
 import { useFlag } from "../../contexts/RemoteConfigContext";
 
 interface Props {
-  track: DeezerTrack;
-  onPlay: (track: DeezerTrack) => void;
+  track: Track;
+  onPlay: (track: Track) => void;
   rank?: number;
   isLiked?: boolean;
-  onLike?: (track: DeezerTrack) => void;
+  onLike?: (track: Track) => void;
   showLike?: boolean;
 }
 

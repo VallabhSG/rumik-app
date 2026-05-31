@@ -33,6 +33,7 @@
     <button class="tab" data-tab="segments">Segments</button>
     <button class="tab" data-tab="results">Exp Results</button>
     <button class="tab" data-tab="schedules">Schedules</button>
+    <button class="tab" data-tab="build-health">Build Health</button>
   </div>
 
   <!-- ── Monitoring ── -->
@@ -258,12 +259,13 @@
             <th>Key</th>
             <th>State</th>
             <th>Reason</th>
+            <th>Rollout %</th>
             <th>Updated</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody id="kills-table">
-          <tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>
+          <tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>
         </tbody>
       </table>
     </div>
@@ -409,7 +411,10 @@
   <div id="panel-results" class="panel">
     <div class="toolbar">
       <h2>Experiment Results</h2>
-      <button id="btn-refresh-results" class="btn btn-ghost">Refresh</button>
+      <div style="display:flex;gap:8px">
+        <button id="btn-export-config" class="btn btn-ghost">Export Config</button>
+        <button id="btn-refresh-results" class="btn btn-ghost">Refresh</button>
+      </div>
     </div>
     <div id="results-container">
       <p style="color:var(--text-muted);text-align:center;padding:32px">Loading…</p>
@@ -433,6 +438,105 @@
           <tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>
         </tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- ── Build Health ── -->
+  <div id="panel-build-health" class="panel">
+    <div class="toolbar">
+      <h2>Build Health</h2>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span id="bh-auto-refresh-label" style="font-size:12px;color:var(--text-muted)">Auto-refresh: 30s</span>
+        <button id="btn-refresh-build-health" class="btn btn-ghost">Refresh</button>
+      </div>
+    </div>
+
+    <!-- Server Health Row -->
+    <div class="section-label">Server Health</div>
+    <div class="chart-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:24px">
+      <div class="chart-card" style="text-align:center;padding:18px">
+        <div class="chart-title">Status</div>
+        <div id="bh-server-status" style="font-size:1.4rem;font-weight:700">—</div>
+      </div>
+      <div class="chart-card" style="text-align:center;padding:18px">
+        <div class="chart-title">Uptime</div>
+        <div id="bh-uptime" style="font-size:1.4rem;font-weight:700;color:var(--text)">—</div>
+      </div>
+      <div class="chart-card" style="text-align:center;padding:18px">
+        <div class="chart-title">Heap Used</div>
+        <div id="bh-heap" style="font-size:1.4rem;font-weight:700;color:var(--text)">—</div>
+      </div>
+      <div class="chart-card" style="text-align:center;padding:18px">
+        <div class="chart-title">Database</div>
+        <div id="bh-db-status" style="font-size:1.4rem;font-weight:700">—</div>
+      </div>
+      <div class="chart-card" style="text-align:center;padding:18px">
+        <div class="chart-title">Scheduler</div>
+        <div id="bh-scheduler-status" style="font-size:1.4rem;font-weight:700">—</div>
+      </div>
+    </div>
+
+    <!-- Summary Counters -->
+    <div class="section-label">Platform Summary</div>
+    <div class="chart-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:24px">
+      <div class="chart-card" style="text-align:center;padding:20px">
+        <div class="chart-title">Active Releases</div>
+        <div id="bh-active-releases" style="font-size:2.5rem;font-weight:700;color:var(--green,#22c55e)">—</div>
+      </div>
+      <div class="chart-card" style="text-align:center;padding:20px">
+        <div class="chart-title">Kill Switches On</div>
+        <div id="bh-kill-switches" style="font-size:2.5rem;font-weight:700;color:var(--orange,#f97316)">—</div>
+      </div>
+      <div class="chart-card" style="text-align:center;padding:20px">
+        <div class="chart-title">Alert Rules</div>
+        <div id="bh-alert-rules" style="font-size:2.5rem;font-weight:700;color:var(--text)">—</div>
+      </div>
+      <div class="chart-card" style="text-align:center;padding:20px">
+        <div class="chart-title">Paused Rollouts</div>
+        <div id="bh-paused" style="font-size:2.5rem;font-weight:700;color:var(--orange,#f97316)">—</div>
+      </div>
+      <div class="chart-card" style="text-align:center;padding:20px">
+        <div class="chart-title">Flags Enabled</div>
+        <div id="bh-flags-enabled" style="font-size:2.5rem;font-weight:700;color:var(--green,#22c55e)">—</div>
+      </div>
+      <div class="chart-card" style="text-align:center;padding:20px">
+        <div class="chart-title">Active Experiments</div>
+        <div id="bh-experiments-active" style="font-size:2.5rem;font-weight:700;color:var(--text)">—</div>
+      </div>
+    </div>
+
+    <!-- Rollout Scheduler -->
+    <div class="section-label">Rollout Scheduler</div>
+    <div id="bh-scheduler-detail" style="margin-bottom:24px">
+      <div style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</div>
+    </div>
+
+    <div class="section-label">Active Release Status</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Version</th><th>Channel</th><th>Platform</th><th>Rollout</th><th>Status</th><th>Created</th>
+          </tr>
+        </thead>
+        <tbody id="bh-releases-table">
+          <tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:24px">
+      <div class="section-label">Active Kill Switches</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Key</th><th>Description</th></tr>
+          </thead>
+          <tbody id="bh-kills-table">
+            <tr><td colspan="2" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 

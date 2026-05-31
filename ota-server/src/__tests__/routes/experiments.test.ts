@@ -203,16 +203,15 @@ describe('Experiment exposure and conversion tracking', () => {
     it('returns per-variant stats with exposures, conversions, rate, and winner', async () => {
       await createExperiment();
 
-      // 2 control exposures, 1 conversion
-      await request(app).post('/api/experiments/my_experiment/expose').send({ install_id: 'c1', variant_id: 'control' });
-      await request(app).post('/api/experiments/my_experiment/expose').send({ install_id: 'c2', variant_id: 'control' });
-      await request(app).post('/api/experiments/my_experiment/convert').send({ install_id: 'c1', variant_id: 'control', event_name: 'purchase' });
-
-      // 2 treatment exposures, 2 conversions (100% vs 50% → lift > 10%)
-      await request(app).post('/api/experiments/my_experiment/expose').send({ install_id: 't1', variant_id: 'treatment' });
-      await request(app).post('/api/experiments/my_experiment/expose').send({ install_id: 't2', variant_id: 'treatment' });
-      await request(app).post('/api/experiments/my_experiment/convert').send({ install_id: 't1', variant_id: 'treatment', event_name: 'purchase' });
-      await request(app).post('/api/experiments/my_experiment/convert').send({ install_id: 't2', variant_id: 'treatment', event_name: 'purchase' });
+      // 10 control exposures, 5 conversions (50% rate)
+      // 10 treatment exposures, 10 conversions (100% rate)
+      // Two-proportion z-test: z≈2.58, p≈0.01 → statistically significant
+      for (let i = 1; i <= 10; i++) {
+        await request(app).post('/api/experiments/my_experiment/expose').send({ install_id: `c${i}`, variant_id: 'control' });
+        if (i <= 5) await request(app).post('/api/experiments/my_experiment/convert').send({ install_id: `c${i}`, variant_id: 'control', event_name: 'purchase' });
+        await request(app).post('/api/experiments/my_experiment/expose').send({ install_id: `t${i}`, variant_id: 'treatment' });
+        await request(app).post('/api/experiments/my_experiment/convert').send({ install_id: `t${i}`, variant_id: 'treatment', event_name: 'purchase' });
+      }
 
       const res = await request(app).get('/api/experiments/my_experiment/results');
       expect(res.status).toBe(200);
@@ -221,12 +220,12 @@ describe('Experiment exposure and conversion tracking', () => {
       const control = res.body.variants.find((v: { id: string }) => v.id === 'control');
       const treatment = res.body.variants.find((v: { id: string }) => v.id === 'treatment');
 
-      expect(control.exposures).toBe(2);
-      expect(control.conversions).toBe(1);
+      expect(control.exposures).toBe(10);
+      expect(control.conversions).toBe(5);
       expect(control.rate).toBeCloseTo(0.5);
 
-      expect(treatment.exposures).toBe(2);
-      expect(treatment.conversions).toBe(2);
+      expect(treatment.exposures).toBe(10);
+      expect(treatment.conversions).toBe(10);
       expect(treatment.rate).toBeCloseTo(1.0);
 
       expect(res.body.winner).toBe('treatment');

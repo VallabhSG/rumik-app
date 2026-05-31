@@ -7,7 +7,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import { bearerAuth } from './middleware/auth.js';
-import adminSessionRouter, { requireAdminSession } from './routes/adminSession.js';
+import adminSessionRouter, { requireAdminSession, isValidAdminSession } from './routes/adminSession.js';
 import releasesRouter from './routes/releases.js';
 import rollbacksRouter from './routes/rollbacks.js';
 import metricsRouter from './routes/metrics.js';
@@ -64,16 +64,56 @@ function buildRateLimiter() {
 
 const apiLimiter = buildRateLimiter();
 
+// Strict rate limiter for login: 5 attempts per IP per 15 minutes
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many login attempts, please try again later.' },
+});
+
 // Actor middleware — applied globally so all routes know who made the request
 app.use(actorMiddleware);
 
 // Health check — no auth
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  let dbStatus: 'ok' | 'error' = 'ok';
+  try {
+    db.prepare('SELECT 1').get();
+  } catch {
+    dbStatus = 'error';
+  }
+  const mem = process.memoryUsage();
+  const schedulerStatus = getSchedulerStatus();
+  const status = dbStatus === 'ok' ? 'ok' : 'degraded';
+  res.status(dbStatus === 'ok' ? 200 : 503).json({
+    status,
+    timestamp: new Date().toISOString(),
+    uptime_seconds: Math.floor(process.uptime()),
+    database: dbStatus,
+    memory: {
+      rss_mb: Math.round(mem.rss / 1024 / 1024),
+      heap_used_mb: Math.round(mem.heapUsed / 1024 / 1024),
+      heap_total_mb: Math.round(mem.heapTotal / 1024 / 1024),
+    },
+    services: {
+      rollout_scheduler: schedulerStatus.running ? 'ok' : 'stopped',
+      alert_engine: 'ok',
+    },
+  });
 });
 
-// Prometheus metrics — no auth (scraper access)
-app.use('/metrics', prometheusMetricsRouter);
+// Prometheus metrics — protected in production; open in dev (no OTA_API_KEY)
+app.use('/metrics', (req, res, next) => {
+  const apiKey = process.env.OTA_API_KEY;
+  if (!apiKey) { next(); return; }
+  if (isValidAdminSession(req)) { next(); return; }
+  const header = req.headers.authorization ?? '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (token === apiKey) { next(); return; }
+  res.status(401).json({ success: false, error: 'Unauthorized' });
+}, prometheusMetricsRouter);
 
 // All /api routes: rate limit first, then bearer auth
 app.use('/api', apiLimiter);
@@ -99,7 +139,8 @@ app.get('/api/scheduler', (_req, res) => {
   res.json({ success: true, data: getSchedulerStatus() });
 });
 
-// Admin session routes (no auth required — handles login/logout)
+// Admin session routes (login is rate-limited; no bearer auth required)
+app.use('/admin/session/login', loginLimiter);
 app.use('/admin/session', express.json(), adminSessionRouter);
 
 // Login page and its CSS — served without auth.
@@ -229,10 +270,14 @@ httpServer.listen(PORT, () => {
   const authMode = process.env.OTA_API_KEY ? 'bearer auth enabled' : 'auth disabled (dev)';
   logger.info({ port: PORT, authMode }, 'OTA server listening');
   logger.info({ url: `ws://localhost:${PORT}/ws` }, 'WebSocket server ready');
+  if (process.env.NODE_ENV === 'production' && !process.env.OTA_API_KEY) {
+    logger.error('OTA_API_KEY is not set — admin access is unsecured in production');
+  }
   runMigrations().catch(e => logger.error({ err: e }, 'Migration failed'));
   seedDemoData();
   startRolloutScheduler();
-  // Alert engine: evaluate rules every 5 minutes
+  // Alert engine: evaluate rules immediately at startup then every 5 minutes
+  runAlertEngine().catch(e => logger.error({ err: e }, 'alertEngine startup error'));
   setInterval(() => { runAlertEngine().catch(e => logger.error({ err: e }, 'alertEngine error')); }, 5 * 60_000);
   // Data TTL cleanup: run at startup (after 5s) then daily
   setTimeout(() => { try { runCleanup(); } catch (e) { logger.warn({ err: e }, 'cleanup startup error'); } }, 5_000);
