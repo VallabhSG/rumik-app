@@ -226,11 +226,7 @@ export class OtaClient {
           undefined,
           { duration_ms: downloadMs },
         );
-        this.eventReporter?.report(
-          release.id,
-          release.version,
-          "staged",
-        );
+        this.eventReporter?.report(release.id, release.version, "staged");
       }
 
       this.onStatus("ready");
