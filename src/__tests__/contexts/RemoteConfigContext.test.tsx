@@ -24,7 +24,9 @@ const mockClient = {
   getStatus: jest.fn().mockReturnValue("ready"),
   subscribe: jest.fn((fn: () => void) => {
     storeListener = fn;
-    return () => { storeListener = null; };
+    return () => {
+      storeListener = null;
+    };
   }),
   setUserContext: jest.fn(),
   refresh: jest.fn().mockResolvedValue(undefined),
@@ -39,9 +41,7 @@ jest.mock("../../hooks/useRemoteConfig", () => ({
 // ---------------------------------------------------------------------------
 
 function Wrapper({ children }: { children: React.ReactNode }) {
-  return (
-    <RemoteConfigPayloadProvider>{children}</RemoteConfigPayloadProvider>
-  );
+  return <RemoteConfigPayloadProvider>{children}</RemoteConfigPayloadProvider>;
 }
 
 describe("RemoteConfigContext", () => {
@@ -127,10 +127,7 @@ describe("RemoteConfigContext", () => {
       function TestComponent() {
         const { setUserContext } = useRemoteConfig();
         return (
-          <Text
-            testID="btn"
-            onPress={() => setUserContext({ userId: "u1" })}
-          />
+          <Text testID="btn" onPress={() => setUserContext({ userId: "u1" })} />
         );
       }
       const { getByTestId } = render(<TestComponent />, { wrapper: Wrapper });
@@ -150,7 +147,9 @@ describe("RemoteConfigContext", () => {
       }
       render(<TestComponent />, { wrapper: Wrapper });
       // Trigger a store change without changing the underlying raw config object
-      act(() => { storeListener?.(); });
+      act(() => {
+        storeListener?.();
+      });
       // Both renders should have the same config reference
       expect(snapshots[0]).toBe(snapshots[snapshots.length - 1]);
     });

@@ -49,7 +49,8 @@ const mockTrack = {
   id: 123,
   title: "Test Track",
   preview: "https://cdn.deezer.com/preview/123.mp3",
-  artist: { id: 1, name: "Test Artist" },
+  duration: 30,
+  artist: { id: 1, name: "Test Artist", picture_medium: "https://cdn/pic.jpg" },
   album: { id: 1, title: "Test Album", cover_medium: "https://cdn/cover.jpg" },
 };
 
@@ -139,7 +140,14 @@ describe("offline", () => {
 
     it("merges with existing metadata", async () => {
       const existing = {
-        999: { id: 999, title: "Old", artist: "Old", cover: "", localUri: "x", downloadedAt: "" },
+        999: {
+          id: 999,
+          title: "Old",
+          artist: "Old",
+          cover: "",
+          localUri: "x",
+          downloadedAt: "",
+        },
       };
       mockStoredMeta(existing);
       await downloadTrack(mockTrack);
@@ -157,19 +165,25 @@ describe("offline", () => {
     });
 
     it("returns false when metadata exists but file does not", async () => {
-      mockStoredMeta({ 123: { id: 123, localUri: "file:///docs/offline/123.mp3" } });
+      mockStoredMeta({
+        123: { id: 123, localUri: "file:///docs/offline/123.mp3" },
+      });
       mockFileExists.mockReturnValue(false);
       expect(await isDownloaded(123)).toBe(false);
     });
 
     it("returns true when metadata exists and file exists", async () => {
-      mockStoredMeta({ 123: { id: 123, localUri: "file:///docs/offline/123.mp3" } });
+      mockStoredMeta({
+        123: { id: 123, localUri: "file:///docs/offline/123.mp3" },
+      });
       mockFileExists.mockReturnValue(true);
       expect(await isDownloaded(123)).toBe(true);
     });
 
     it("returns false when AsyncStorage throws", async () => {
-      mockAsyncStorage.getItem.mockRejectedValueOnce(new Error("storage error"));
+      mockAsyncStorage.getItem.mockRejectedValueOnce(
+        new Error("storage error"),
+      );
       expect(await isDownloaded(123)).toBe(false);
     });
   });
@@ -180,7 +194,9 @@ describe("offline", () => {
     });
 
     it("returns null when file does not exist", async () => {
-      mockStoredMeta({ 123: { id: 123, localUri: "file:///docs/offline/123.mp3" } });
+      mockStoredMeta({
+        123: { id: 123, localUri: "file:///docs/offline/123.mp3" },
+      });
       mockFileExists.mockReturnValue(false);
       expect(await getLocalUri(123)).toBeNull();
     });
@@ -200,21 +216,27 @@ describe("offline", () => {
     });
 
     it("deletes the file when it exists", async () => {
-      mockStoredMeta({ 123: { id: 123, localUri: "file:///docs/offline/123.mp3" } });
+      mockStoredMeta({
+        123: { id: 123, localUri: "file:///docs/offline/123.mp3" },
+      });
       mockFileExists.mockReturnValue(true);
       await removeDownload(123);
       expect(mockFileDelete).toHaveBeenCalled();
     });
 
     it("skips file deletion when file does not exist", async () => {
-      mockStoredMeta({ 123: { id: 123, localUri: "file:///docs/offline/123.mp3" } });
+      mockStoredMeta({
+        123: { id: 123, localUri: "file:///docs/offline/123.mp3" },
+      });
       mockFileExists.mockReturnValue(false);
       await removeDownload(123);
       expect(mockFileDelete).not.toHaveBeenCalled();
     });
 
     it("removes track from metadata and saves", async () => {
-      mockStoredMeta({ 123: { id: 123, localUri: "file:///docs/offline/123.mp3" } });
+      mockStoredMeta({
+        123: { id: 123, localUri: "file:///docs/offline/123.mp3" },
+      });
       mockFileExists.mockReturnValue(true);
       await removeDownload(123);
       const saved = JSON.parse(
@@ -231,8 +253,22 @@ describe("offline", () => {
 
     it("returns all stored metadata values", async () => {
       const meta = {
-        1: { id: 1, title: "A", artist: "X", cover: "", localUri: "", downloadedAt: "" },
-        2: { id: 2, title: "B", artist: "Y", cover: "", localUri: "", downloadedAt: "" },
+        1: {
+          id: 1,
+          title: "A",
+          artist: "X",
+          cover: "",
+          localUri: "",
+          downloadedAt: "",
+        },
+        2: {
+          id: 2,
+          title: "B",
+          artist: "Y",
+          cover: "",
+          localUri: "",
+          downloadedAt: "",
+        },
       };
       mockStoredMeta(meta);
       const result = await getAllDownloads();

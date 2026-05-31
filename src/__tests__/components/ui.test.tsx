@@ -65,7 +65,9 @@ describe("OnboardingModal", () => {
   it("checks AsyncStorage when enabled", async () => {
     render(<OnboardingModal enabled={true} />);
     await act(async () => {});
-    expect(mockAsyncStorage.getItem).toHaveBeenCalledWith("onboarding:shown_v3");
+    expect(mockAsyncStorage.getItem).toHaveBeenCalledWith(
+      "onboarding:shown_v3",
+    );
   });
 
   it("shows modal when storage returns null", async () => {

@@ -78,7 +78,12 @@ describe("useExperimentTracking", () => {
         useExperimentTracking("my_exp", "treatment"),
       );
       await act(async () => {
-        await result.current.trackConversion("device-123", "purchase", 2, "user-456");
+        await result.current.trackConversion(
+          "device-123",
+          "purchase",
+          2,
+          "user-456",
+        );
       });
       expect(mockTrackConversion).toHaveBeenCalledWith("my_exp", {
         install_id: "device-123",
