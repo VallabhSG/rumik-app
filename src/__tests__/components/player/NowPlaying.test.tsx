@@ -59,6 +59,11 @@ jest.mock("expo-haptics", () => ({
 
 import { NowPlaying } from "../../../components/player/NowPlaying";
 
+// The first test in a jest-expo file pays a one-time module cold-start cost that,
+// under coverage instrumentation on slower CI hardware, can exceed the default
+// 5s test timeout. Give the async render/waitFor cycle generous headroom.
+jest.setTimeout(20000);
+
 const DOWNLOADED = "✓";
 const IDLE = "⬇";
 
