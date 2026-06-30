@@ -35,6 +35,7 @@ jest.mock("../../hooks/useMiniPlayerPadding", () => ({
 }));
 
 jest.mock("react-native-safe-area-context", () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- jest.mock factories are hoisted; out-of-scope imports aren't allowed, so require() is the idiomatic way to reach react-native here.
   const { View } = require("react-native");
   return {
     SafeAreaView: ({

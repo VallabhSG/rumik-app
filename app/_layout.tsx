@@ -42,14 +42,15 @@ function ClerkUserBridge() {
   const plan = (
     (user?.publicMetadata?.plan as string | undefined) ?? "free"
   ).toLowerCase();
+  const userId = user?.id;
+  const email = user?.primaryEmailAddress?.emailAddress ?? "";
 
   useEffect(() => {
-    if (!user) return;
-    const email = user.primaryEmailAddress?.emailAddress ?? "";
+    if (!userId) return;
     const email_domain = email.includes("@") ? email.split("@")[1] : undefined;
-    client.setUserContext({ userId: user.id, email_domain, plan });
+    client.setUserContext({ userId, email_domain, plan });
     void client.refresh();
-  }, [user?.id, plan]);
+  }, [userId, email, plan, client]);
 
   return null;
 }

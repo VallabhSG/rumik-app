@@ -6,7 +6,7 @@ import logger from './logger.js';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
-import { bearerAuth } from './middleware/auth.js';
+import { bearerAuth, safeCompare } from './middleware/auth.js';
 import adminSessionRouter, { requireAdminSession, isValidAdminSession } from './routes/adminSession.js';
 import releasesRouter from './routes/releases.js';
 import rollbacksRouter from './routes/rollbacks.js';
@@ -111,7 +111,7 @@ app.use('/metrics', (req, res, next) => {
   if (isValidAdminSession(req)) { next(); return; }
   const header = req.headers.authorization ?? '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-  if (token === apiKey) { next(); return; }
+  if (token && safeCompare(token, apiKey)) { next(); return; }
   res.status(401).json({ success: false, error: 'Unauthorized' });
 }, prometheusMetricsRouter);
 
@@ -160,7 +160,14 @@ app.use((_req, res) => {
 // 5xx — must have 4 params so Express treats it as an error handler
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   logger.error({ err }, 'unhandled error');
-  const message = err instanceof Error ? err.message : 'Internal server error';
+  // Never leak internal error details to clients in production — log them above,
+  // return a generic message. Detailed messages are kept for local/dev debugging.
+  const message =
+    process.env.NODE_ENV === 'production'
+      ? 'Internal server error'
+      : err instanceof Error
+        ? err.message
+        : 'Internal server error';
   res.status(500).json({ success: false, error: message });
 });
 
