@@ -2,7 +2,6 @@
  * Creates an isolated Express app backed by an in-memory SQLite DB for testing.
  * Each call returns a fresh DB — tests don't share state.
  */
-import express from 'express';
 import Database from 'better-sqlite3';
 import { v4 as uuid } from 'uuid';
 

@@ -38,6 +38,7 @@ export function NowPlaying({ visible, onClose }: Props) {
   const [liked, setLiked] = useState(false);
   const [downloadStatus, setDownloadStatus] = useState<DownloadStatus>("idle");
   const [downloadProgress, setDownloadProgress] = useState(0);
+  const trackId = track?.id;
   const enableLyricsLink = useFlag("enable_lyrics_link");
   const enableOfflineMode = useFlag("enable_offline_mode");
   const hapticsEnabled = useFlag("ios_exclusive_feature");
@@ -50,14 +51,26 @@ export function NowPlaying({ visible, onClose }: Props) {
     }
   }, [track, user?.id]);
 
-  useEffect(() => {
-    if (!track) return;
+  // Reset download UI synchronously when the track changes. Render-phase reset
+  // is React's recommended pattern for deriving state from props — it avoids the
+  // extra render an effect-based reset would cause.
+  const [lastTrackId, setLastTrackId] = useState<number | undefined>(trackId);
+  if (trackId !== lastTrackId) {
+    setLastTrackId(trackId);
     setDownloadStatus("idle");
     setDownloadProgress(0);
-    isDownloaded(track.id).then((already) => {
-      if (already) setDownloadStatus("downloaded");
+  }
+
+  useEffect(() => {
+    if (!trackId) return;
+    let cancelled = false;
+    isDownloaded(trackId).then((already) => {
+      if (already && !cancelled) setDownloadStatus("downloaded");
     });
-  }, [track?.id]);
+    return () => {
+      cancelled = true;
+    };
+  }, [trackId]);
 
   const panResponder = PanResponder.create({
     onMoveShouldSetPanResponder: (_, g) => g.dy > 10,
